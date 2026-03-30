@@ -8,7 +8,7 @@ from app.controllers import user_controller
 from app.db.database import get_db
 from app.models.role import ROLE_ADMIN, ROLE_APPLICANT
 from app.models.user import User
-from app.schemas.user import UserCreate, UserRead, UserUpdate
+from app.schemas.user import ApplicationSubmit, UserCreate, UserRead, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -58,11 +58,14 @@ async def delete_user(
 
 @router.post("/me/apply", response_model=UserRead)
 async def submit_application(
+    payload: ApplicationSubmit,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     _: User = Depends(require_roles(ROLE_APPLICANT)),
 ):
-    return await user_controller.submit_application(current_user, db)
+    return await user_controller.submit_application(
+        current_user, payload.model_dump(mode="json"), db
+    )
 
 
 @router.post("/{user_id}/approve", response_model=UserRead)

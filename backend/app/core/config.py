@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    BOOTSTRAP_ADMIN_EMAILS: list[str] = ["nrikhil@gmail.com","recon2k26@gmail.com"]
+    BOOTSTRAP_ADMIN_EMAILS: list[str] = ["nrikhil@gmail.com","recon2k26@gmail.com", "abhiram.shivam@gmail.com", "abhiramvsa7@gmail.com"]
 
     # ── Database ──────────────────────────────────────────────
     DATABASE_USER: str = "postgres"
@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     DATABASE_NAME: str = "recon_db"
 
     ASYNC_DATABASE_URI: PostgresDsn | str = ""
+
+    # ── R2 / Cloudflare ───────────────────────────────────────
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET_NAME: str = ""
 
     @field_validator("ASYNC_DATABASE_URI", mode="before")
     @classmethod

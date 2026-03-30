@@ -1,7 +1,8 @@
 import datetime
 import uuid
+from typing import Any
 
-from pydantic import EmailStr
+from pydantic import EmailStr, Field
 from sqlmodel import SQLModel
 
 from app.models.user import UserBase
@@ -22,7 +23,17 @@ class UserCreate(SQLModel):
 class UserRead(UserBase):
     id: uuid.UUID
     created_at: datetime.datetime
+    form_response: dict[str, Any] | None = None
     role: RoleRead | None = None
+
+
+class ApplicationSubmit(SQLModel):
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    phone_number: str = Field(min_length=7, max_length=20)
+    dob: datetime.date
+    resume_file_key: str = Field(min_length=1, max_length=512)
 
 
 class UserUpdate(SQLModel):

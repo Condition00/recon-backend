@@ -100,6 +100,7 @@ async def submit_application_for_current_user(
     db: AsyncSession,
     *,
     current_user: User,
+    form_response: dict,
 ) -> User:
     user = await get_user_by_id(db, current_user.id, with_role=True)
     if not user:
@@ -107,6 +108,7 @@ async def submit_application_for_current_user(
     if user.status is not None:
         raise HTTPException(status_code=409, detail="Application already submitted")
 
+    user.form_response = form_response
     user.status = STATUS_PENDING
     await db.flush()
     await db.refresh(user)

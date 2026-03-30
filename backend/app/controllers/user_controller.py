@@ -1,5 +1,6 @@
 import uuid
 
+from fastapi import HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.user import User
@@ -49,8 +50,15 @@ async def delete_user(user_id: uuid.UUID, db: AsyncSession) -> None:
     await delete_user_as_admin(db, user_id=user_id)
 
 
-async def submit_application(current_user: User, db: AsyncSession) -> User:
-    return await submit_application_for_current_user(db, current_user=current_user)
+async def submit_application(current_user: User, form_response: dict, db: AsyncSession) -> User:
+    resume_key = form_response.get("resume_file_key", "")
+    expected_prefix = f"resumes/{current_user.id}/"
+    if not resume_key.startswith(expected_prefix):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Resume file key does not belong to this user.",
+        )
+    return await submit_application_for_current_user(db, current_user=current_user, form_response=form_response)
 
 
 async def approve_user(user_id: uuid.UUID, db: AsyncSession) -> User:

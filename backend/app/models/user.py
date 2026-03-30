@@ -1,6 +1,8 @@
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
+from sqlalchemy import Column
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.models.base import Base
@@ -24,6 +26,9 @@ class User(Base, UserBase, table=True):
     __tablename__ = "users"
 
     hashed_password: Optional[str] = Field(default=None, max_length=128)
+    form_response: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSONB, nullable=True)
+    )
     role_id: uuid.UUID | None = Field(default=None, foreign_key="roles.id", index=True)
 
     # Relationships
