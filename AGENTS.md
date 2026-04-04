@@ -56,17 +56,26 @@ Router (thin HTTP layer)  ->  Controller (orchestration + parsing)  ->  Service 
 - **Services** (`service.py`): Pure business logic for a single concern. No HTTP context. Receives typed data, returns domain objects or raises `HTTPException`.
 - **CRUD** (`crud.py`): Raw database operations only. SELECT, INSERT, UPDATE, DELETE. No business decisions.
 
-### Three-Tier Structure
+### Audience-Based Top-Level Structure
 
-The codebase uses three clearly separated tiers:
+The codebase is split by **audience** at the top level. Each top-level folder represents a distinct stakeholder surface with its own concerns and access patterns:
 
-| Tier | Path | What belongs here |
+| Folder | Audience | What belongs here |
 |---|---|---|
-| **domains/** | `app/domains/` | Event business concepts. Anything that maps to what participants, zones, or ops staff experience. Owns DB tables. |
-| **infrastructure/** | `app/infrastructure/` | Technical capabilities with real logic but no business domain affinity. R2 storage, Redis pub/sub helpers, future WebSocket/chatroom. May have HTTP endpoints. No owned DB tables. |
-| **utils/** | `app/utils/` | Pure framework plumbing. FastAPI `Depends()`, shared exception classes, SQLModel base. Flat files only. No HTTP endpoints. |
+| `domains/` | Participants | Participant-facing event concepts. Owns DB tables. Vertical slices — one sub-folder per feature. |
+| `admin/` | Ops staff / event admins | Aggregated ops dashboard, overrides, role management. Aggregates across domains. Horizontal layers inside. |
+| `partners/` | Sponsors / partners | Post-event ROI metrics, footfall, engagement data, booth management. Horizontal layers inside. |
+| `infrastructure/` | (app-wide) | Technical capabilities with no audience affinity — R2 storage, Redis helpers, WebSocket/chatroom. |
+| `utils/` | (app-wide) | Pure framework plumbing — `Depends()`, exception classes, SQLModel base. Flat files only. |
 
-**The decision rule:** if it maps to an event concept → `domains/`. If it's a technical capability the app provides → `infrastructure/`. If it's framework glue → `utils/`.
+**The decision rule:**
+- Participant-facing event feature → `domains/<feature>/`
+- Ops or admin surface → `admin/`
+- Sponsor or partner surface → `partners/`
+- Technical capability (storage, caching, realtime) → `infrastructure/<capability>/`
+- Framework glue → `utils/`
+
+`admin/` and `partners/` use **horizontal layers** internally (a single `models/`, `schemas/`, `crud/`, `service/`, `controller/`, `router/` each) because they are each a single coherent surface — not collections of independent sub-features. Their service layer will call into domain services for data rather than owning the source of truth.
 
 ### Directory Structure
 
@@ -94,7 +103,7 @@ backend/app/
       router/                   # r2_router.py — GET /r2/upload-url, /r2/read-url
       schemas/                  # r2_schemas.py — PresignedUploadResponse, PresignedReadResponse
       tests/
-  domains/                      # All event business features as vertical slices
+  domains/                      # Participant-facing event features — vertical slices
     auth/                       # COMPLETE — OAuth, JWT, user CRUD
       models/                   # user.py, role.py, oauth_account.py, refresh_token.py
       schemas/                  # UserRead, UserCreate, UserUpdate, UserProfile, RoleRead
@@ -111,20 +120,39 @@ backend/app/
     announcements/              # SCAFFOLD ONLY
     teams/                      # SCAFFOLD ONLY
     incidents/                  # SCAFFOLD ONLY
-    webhooks/                   # SCAFFOLD ONLY (no models/, no crud/)
-    admin/                      # SCAFFOLD ONLY (no models/, no crud/)
+    webhooks/                   # SCAFFOLD ONLY
+  admin/                        # SCAFFOLD ONLY — ops dashboard (horizontal layers)
+    models/
+    schemas/
+    crud/
+    service/                    # aggregates across domain services — no owned source of truth
+    controller/
+    router/
+    tests/
+  partners/                     # SCAFFOLD ONLY — sponsor/partner dashboard (horizontal layers)
+    models/
+    schemas/
+    crud/
+    service/
+    controller/
+    router/
+    tests/
   api/
     v1/
-      api.py                    # Mounts all routers — one include_router per domain + infrastructure
+      api.py                    # Mounts all routers — domains + admin + partners + infrastructure
 ```
 
-### Adding a New Domain
+### Adding a Participant Domain Feature
 
 1. Create folder under `domains/<name>/` with: `__init__.py`, `models/`, `schemas/`, `crud/`, `service/`, `controller/`, `router/`, `tests/`
 2. Add model imports to `app/models/__init__.py` so Alembic discovers them
 3. Add one `include_router()` line in `api/v1/api.py`
 4. Write tests in `domains/<name>/tests/`
-5. Update the **Project State** section in this file to reflect what was added
+5. Update the **Project State** section in this file
+
+### Adding to Admin or Partners
+
+Work inside `admin/` or `partners/` horizontally. New endpoints go in `router/`, new business logic in `service/`, new DB queries in `crud/`. If a new table is needed, add the model to `models/` and import it in `app/models/__init__.py`. Do not create new sub-folders inside `admin/` or `partners/` — keep them flat.
 
 ### Adding a New Infrastructure Capability
 
@@ -132,7 +160,7 @@ backend/app/
 2. Add one `include_router()` line in `api/v1/api.py` if it has HTTP endpoints
 3. Update the **Project State** section in this file
 
-A contributor owns their entire domain or infrastructure folder end-to-end. Cross-domain touches are limited to steps 2, 3, and the Project State update.
+A contributor owns their entire folder end-to-end. Cross-cutting touches (model aggregator, router mount, AGENTS.md state) are the only shared files.
 
 ---
 
@@ -247,16 +275,18 @@ Agents MUST update this section after completing any meaningful change — domai
 
 ### Current Architecture Status
 
-Three-tier structure is complete and stable:
+Audience-based top-level structure is complete and stable:
 
 - **`utils/`** — flat files only: `deps.py`, `exceptions.py`, `rbac.py`, `models/base.py`
-- **`infrastructure/storage/`** — fully implemented: R2 presigned upload/read URLs via boto3. Mounts at `/api/v1/r2/`.
+- **`infrastructure/storage/`** — fully implemented: R2 presigned upload/read URLs via boto3. Mounts at `/api/v1/r2/`
 - **`domains/auth/`** — fully implemented: Google OAuth, JWT tokens, refresh/logout, user CRUD, RBAC seeding
-- All other domain folders are scaffolded (empty `__init__.py` files only)
+- **`admin/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
+- **`partners/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
+- All other participant domain folders are scaffolded (empty `__init__.py` files only)
 - `app/models/__init__.py` is the Alembic aggregator — import new domain models here when added
-- `api/v1/api.py` mounts all routers (domains + infrastructure) — add one `include_router` per new domain or infrastructure capability here
+- `api/v1/api.py` mounts all routers (domains + admin + partners + infrastructure)
 
-### Domains Status
+### Participant Domains Status
 
 | Domain | Status | Notes |
 |---|---|---|
@@ -268,7 +298,21 @@ Three-tier structure is complete and stable:
 | schedule | Not started | Sessions, announcements, zone map data |
 | incidents | Not started | Webhook ingestion from n8n/Google Forms |
 | webhooks | Not started | n8n form payload ingestion |
-| admin | Not started | Aggregated ops dashboard, overrides |
+| shop | Not started | Redemption store |
+| teams | Not started | Team formation and management |
+| announcements | Not started | Push/broadcast announcements |
+
+### Admin Status
+
+| Surface | Status | Notes |
+|---|---|---|
+| admin | Not started | Aggregated ops dashboard, overrides, zone controls, incident feed |
+
+### Partners Status
+
+| Surface | Status | Notes |
+|---|---|---|
+| partners | Not started | Post-event ROI metrics, footfall data, engagement stats, booth management |
 
 ### Infrastructure Status
 
@@ -283,7 +327,8 @@ Three-tier structure is complete and stable:
 ## What NOT to Do
 
 - Do not leave the **Project State** section outdated after making changes. Update it before finishing any task.
-- Do not add a flat `controllers/` file outside of a domain or infrastructure folder. Controllers belong inside `domains/<name>/controller/` or `infrastructure/<name>/controller/`.
+- Do not add a flat `controllers/` file outside of its audience folder. Controllers belong inside `domains/<name>/controller/`, `admin/controller/`, `partners/controller/`, or `infrastructure/<name>/controller/`.
+- Do not create sub-folders inside `admin/` or `partners/`. They are single-surface, flat-layer folders. New features within them extend the existing horizontal layers, not new vertical slices.
 - Do not import raw `engine` or `Redis()` in service/business logic. Use `Depends()`.
 - Do not put business logic in routers. Routers validate input and call services.
 - Do not create models without adding their import to `app/models/__init__.py`.

@@ -58,31 +58,45 @@ Visit `http://localhost:8000/docs` to confirm everything is running.
 
 ---
 
-## Adding a new domain
+## Where does my change go?
 
-A domain is an event business concept (zones, points, schedule, etc.). Each domain is a self-contained vertical slice under `domains/`.
+The top-level folder structure is split by **audience**:
+
+| Folder | Who uses it | Internal structure |
+|---|---|---|
+| `domains/` | Participants | Vertical slices — one sub-folder per feature |
+| `admin/` | Ops staff / event admins | Single flat horizontal layer |
+| `partners/` | Sponsors / partners | Single flat horizontal layer |
+| `infrastructure/` | App-wide technical capabilities | One sub-folder per capability |
+| `utils/` | Framework plumbing | Flat files only |
+
+---
+
+## Adding a participant domain feature
+
+A domain is a participant-facing event concept (zones, points, schedule, etc.). Each is a self-contained vertical slice under `domains/`.
 
 ```
 domains/<name>/
   __init__.py
   models/
-    __init__.py       # re-exports only
-    <name>.py         # SQLModel table=True models
+    __init__.py         # re-exports only
+    <name>.py           # SQLModel table=True models
   schemas/
     __init__.py
-    <name>.py         # SQLModel/Pydantic request+response shapes
+    <name>.py           # SQLModel/Pydantic request+response shapes
   crud/
     __init__.py
-    <name>.py         # raw DB queries only — no business logic
+    <name>.py           # raw DB queries only — no business logic
   service/
     __init__.py
-    <name>_service.py # business logic — no HTTP context
+    <name>_service.py   # business logic — no HTTP context
   controller/
     __init__.py
     <name>_controller.py  # orchestration — calls services, no HTTP context
   router/
     __init__.py
-    <name>_router.py  # HTTP layer — Depends(), request parsing, return response
+    <name>_router.py    # HTTP layer — Depends(), request parsing, return response
   tests/
     __init__.py
 ```
@@ -101,9 +115,20 @@ After creating the domain:
 
 ---
 
+## Adding to admin or partners
+
+`admin/` and `partners/` are single flat surfaces. Do not create sub-folders inside them. Extend the existing horizontal layers:
+
+- New endpoint → `router/` (new function in the existing router file)
+- New business logic → `service/` (new function in the existing service file)
+- New DB query → `crud/`
+- New table → `models/` + import it in `app/models/__init__.py`
+
+---
+
 ## Adding a new infrastructure capability
 
-Infrastructure is a technical capability with no business domain affinity (file storage, Redis pub/sub helpers, WebSocket chatroom). It lives under `infrastructure/`.
+Infrastructure is a technical capability with no audience affinity (file storage, Redis pub/sub, WebSocket). It lives under `infrastructure/`.
 
 ```
 infrastructure/<name>/

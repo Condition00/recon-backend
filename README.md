@@ -78,14 +78,18 @@ uv run alembic downgrade -1
 
 ## Project structure
 
+Top-level folders are split by **audience**:
+
 ```
 backend/app/
+  domains/           Participant-facing event features — zones, points, schedule, auth, ...
+  admin/             Ops/admin dashboard — aggregated views, overrides, controls
+  partners/          Sponsor/partner dashboard — ROI metrics, footfall, engagement
+  infrastructure/    Technical capabilities — storage (R2), future: cache, realtime
+  utils/             Framework plumbing — deps.py, exceptions.py, rbac.py, models/base.py
   core/              Config, security, OAuth — do not restructure
   db/                Async database session setup
   models/            Alembic aggregator (__init__.py imports all domain models)
-  utils/             Framework plumbing — deps.py, exceptions.py, rbac.py, models/base.py
-  infrastructure/    Technical capabilities — storage (R2), future: cache, realtime
-  domains/           Event business logic — auth, zones, points, participants, ...
   api/v1/api.py      Mounts all routers
   main.py            App entry point — lifespan, middleware
 ```
