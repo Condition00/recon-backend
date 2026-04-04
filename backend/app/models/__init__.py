@@ -1,4 +1,6 @@
-from app.models.user import User
-from app.models.role import Role
-from app.models.refresh_token import RefreshToken
-from app.models.oauth_account import OAuthAccount
+from app.domains.auth.models import (  # noqa: F401
+    User, UserBase,
+    Role, RoleBase, ROLE_ADMIN, ROLE_PARTICIPANT, ROLE_PARTNER, DEFAULT_ROLE_NAMES,
+    RefreshToken, RefreshTokenBase,
+    OAuthAccount, OAuthAccountBase,
+)

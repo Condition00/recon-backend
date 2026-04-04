@@ -11,9 +11,7 @@ from sqlalchemy.orm import joinedload
 
 from app.core.config import settings
 from app.db.database import get_db
-from app.models.refresh_token import RefreshToken
-from app.models.role import Role
-from app.models.user import User
+from app.domains.auth.models import RefreshToken, Role, User
 
 
 def create_access_token(user_id: uuid.UUID, role_name: str) -> str:

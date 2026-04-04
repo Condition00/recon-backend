@@ -11,7 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.v1.api import router
-from app.controllers.rbac_controller import ensure_default_roles_and_admins
+from app.utils.rbac import ensure_default_roles_and_admins
 from app.core.config import settings
 from app.db.database import AsyncSessionLocal, engine, get_db
 
