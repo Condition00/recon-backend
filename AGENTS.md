@@ -312,7 +312,7 @@ Audience-based top-level structure is complete and stable:
 
 | Surface | Status | Notes |
 |---|---|---|
-| partners | Not started | Post-event ROI metrics, footfall data, engagement stats, booth management |
+| partners | Complete (models, schemas, CRUD, service, controller, router) | Application form, incentives (+ add more), asset uploads, admin review/approval, role promotion on approval. Tables: `partners`, `partner_incentives`, `partner_assets`, `partner_reports`. Migration: `cb0dd356e35b`. |
 
 ### Infrastructure Status
 
