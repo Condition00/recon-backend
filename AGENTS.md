@@ -103,6 +103,10 @@ backend/app/
       router/                   # r2_router.py — GET /r2/upload-url, /r2/read-url
       schemas/                  # r2_schemas.py — PresignedUploadResponse, PresignedReadResponse
       tests/
+    cache/                      # Redis helpers — no HTTP endpoints, service-only
+      service/
+        cache_service.py        # get, set, delete, publish, sorted-set, counter helpers
+        keys.py                 # Key namespace constants and builders (recon:{domain}:{entity}:{id})
   domains/                      # Participant-facing event features — vertical slices
     auth/                       # COMPLETE — OAuth, JWT, user CRUD
       models/                   # user.py, role.py, oauth_account.py, refresh_token.py
@@ -279,6 +283,7 @@ Audience-based top-level structure is complete and stable:
 
 - **`utils/`** — flat files only: `deps.py`, `exceptions.py`, `rbac.py`, `models/base.py`
 - **`infrastructure/storage/`** — fully implemented: R2 presigned upload/read URLs via boto3. Mounts at `/api/v1/r2/`
+- **`infrastructure/cache/`** — fully implemented: Redis helpers (get/set with TTL, pub/sub, sorted-set leaderboard, counters) + namespaced key builders. Service-only, no HTTP endpoints.
 - **`domains/auth/`** — fully implemented: Google OAuth, JWT tokens, refresh/logout, user CRUD, RBAC seeding
 - **`admin/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
 - **`partners/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
@@ -319,7 +324,7 @@ Audience-based top-level structure is complete and stable:
 | Capability | Status | Notes |
 |---|---|---|
 | storage (R2) | Complete | Presigned upload/read URLs. `infrastructure/storage/`. Mounts at `/api/v1/r2/`. |
-| cache (Redis) | Not started | Redis pub/sub helpers, key management utilities |
+| cache (Redis) | Complete | Redis helpers (get/set, pub/sub, sorted-set, counters) + namespaced key builders. `infrastructure/cache/`. No HTTP endpoints. |
 | realtime | Not started | WebSocket chatroom — planned feature |
 
 ---
