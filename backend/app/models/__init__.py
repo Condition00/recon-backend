@@ -4,3 +4,4 @@ from app.domains.auth.models import (  # noqa: F401
     RefreshToken, RefreshTokenBase,
     OAuthAccount, OAuthAccountBase,
 )
+from app.domains.incidents.models import Incident  # noqa: F401
