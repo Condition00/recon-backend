@@ -5,3 +5,10 @@ from app.domains.auth.models import (  # noqa: F401
     OAuthAccount, OAuthAccountBase,
 )
 from app.domains.incidents.models import Incident  # noqa: F401
+from app.partners.models import (  # noqa: F401
+    Partner, PartnerBase, PartnerStatus, SponsorshipType,
+    PartnerIncentive, PartnerIncentiveBase, IncentiveType,
+    PartnerAsset, PartnerAssetBase, AssetType,
+    PartnerReport, PartnerReportBase,
+)
+from app.domains.participants.models import Participant, ParticipantBase  # noqa: F401
