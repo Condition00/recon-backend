@@ -112,7 +112,7 @@ backend/app/
       controller/               # auth_controller.py, user_controller.py
       router/                   # auth_router.py (/auth/*), user_router.py (/users/*)
       tests/
-    participants/               # SCAFFOLD ONLY
+    participants/               # IMPLEMENTED — profile, discovery, check-in, talent visibility
     zones/                      # SCAFFOLD ONLY
     points/                     # SCAFFOLD ONLY
     shop/                       # SCAFFOLD ONLY
@@ -281,8 +281,8 @@ Audience-based top-level structure is complete and stable:
 - **`infrastructure/storage/`** — fully implemented: R2 presigned upload/read URLs via boto3. Mounts at `/api/v1/r2/`
 - **`domains/auth/`** — fully implemented: Google OAuth, JWT tokens, refresh/logout, user CRUD, RBAC seeding
 - **`admin/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
-- **`partners/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
-- All other participant domain folders are scaffolded (empty `__init__.py` files only)
+- **`partners/`** — fully implemented (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
+- All other participant domain folders except `auth/` and `participants/` are scaffolded (empty `__init__.py` files only)
 - `app/models/__init__.py` is the Alembic aggregator — import new domain models here when added
 - `api/v1/api.py` mounts all routers (domains + admin + partners + infrastructure)
 
@@ -292,7 +292,7 @@ Audience-based top-level structure is complete and stable:
 |---|---|---|
 | auth | Complete | Google OAuth, JWT tokens, refresh/logout |
 | users | Complete | CRUD, role assignment, RBAC seeding. Roles: admin/participant/partner. No applicant role. |
-| participants | Not started | Profile, QR check-in, NFC token assignment |
+| participants | In progress | Profile creation/update, participant discovery, admin list/filter, admin check-in, talent visibility toggle. QR endpoint intentionally deferred because Luma handles ticketing; NFC persistence deferred. |
 | zones | Not started | Capacity, queue, status (red/amber/green) |
 | points | Not started | Passport economy, earn/spend, leaderboard |
 | schedule | Not started | Sessions, announcements, zone map data |

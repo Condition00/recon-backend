@@ -1,6 +1,7 @@
 import uuid
 from typing import Optional
 
+from sqlalchemy.orm import selectinload
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -8,19 +9,27 @@ from app.partners.models.partner import Partner, PartnerStatus
 from app.partners.schemas.partner import PartnerCreate
 
 
+def _partner_query():
+    return select(Partner).options(
+        selectinload(Partner.incentives),
+        selectinload(Partner.assets),
+    )
+
+
 async def get_partner_by_id(db: AsyncSession, partner_id: uuid.UUID) -> Optional[Partner]:
-    return await db.get(Partner, partner_id)
+    result = await db.exec(_partner_query().where(Partner.id == partner_id))
+    return result.one_or_none()
 
 
 async def get_partner_by_user_id(db: AsyncSession, user_id: uuid.UUID) -> Optional[Partner]:
-    result = await db.exec(select(Partner).where(Partner.user_id == user_id))
+    result = await db.exec(_partner_query().where(Partner.user_id == user_id))
     return result.one_or_none()
 
 
 async def list_partners(
     db: AsyncSession, *, status: Optional[PartnerStatus] = None, skip: int = 0, limit: int = 50
 ) -> list[Partner]:
-    q = select(Partner)
+    q = _partner_query()
     if status:
         q = q.where(Partner.status == status)
     q = q.offset(skip).limit(limit).order_by(Partner.created_at.desc())

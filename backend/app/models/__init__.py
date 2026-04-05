@@ -10,3 +10,4 @@ from app.partners.models import (  # noqa: F401
     PartnerAsset, PartnerAssetBase, AssetType,
     PartnerReport, PartnerReportBase,
 )
+from app.domains.participants.models import Participant, ParticipantBase  # noqa: F401
