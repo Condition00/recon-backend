@@ -117,7 +117,7 @@ backend/app/
     points/                     # SCAFFOLD ONLY
     shop/                       # SCAFFOLD ONLY
     schedule/                   # SCAFFOLD ONLY
-    announcements/              # SCAFFOLD ONLY
+    announcements/              # IMPLEMENTED — active feed + admin publish/edit/delete
     teams/                      # SCAFFOLD ONLY
     incidents/                  # SCAFFOLD ONLY
     webhooks/                   # SCAFFOLD ONLY
@@ -280,9 +280,10 @@ Audience-based top-level structure is complete and stable:
 - **`utils/`** — flat files only: `deps.py`, `exceptions.py`, `rbac.py`, `models/base.py`
 - **`infrastructure/storage/`** — fully implemented: R2 presigned upload/read URLs via boto3. Mounts at `/api/v1/r2/`
 - **`domains/auth/`** — fully implemented: Google OAuth, JWT tokens, refresh/logout, user CRUD, RBAC seeding
+- **`domains/announcements/`** — implemented: active feed + admin publish/edit/delete routes with expiry/pinning support
 - **`admin/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
-- **`partners/`** — fully implemented (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
-- All other participant domain folders except `auth/` and `participants/` are scaffolded (empty `__init__.py` files only)
+- **`partners/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
+- Remaining participant domain folders are scaffolded (empty `__init__.py` files only)
 - `app/models/__init__.py` is the Alembic aggregator — import new domain models here when added
 - `api/v1/api.py` mounts all routers (domains + admin + partners + infrastructure)
 
@@ -300,7 +301,7 @@ Audience-based top-level structure is complete and stable:
 | webhooks | Not started | n8n form payload ingestion |
 | shop | Not started | Redemption store |
 | teams | Not started | Team formation and management |
-| announcements | Not started | Push/broadcast announcements |
+| announcements | Complete (initial API) | Active feed (`GET /announcements`, `GET /announcements/{id}`), admin publish/edit/delete (`POST /announcements`, `PATCH /announcements/{id}`, `DELETE /announcements/{id}`), fields: priority/published_at/expires_at/is_pinned/created_by. Table: `announcements`. Migration: `d1f2a3b4c5d6`. Realtime pub/sub events published on create/update/delete to Redis channel `announcements.live`. |
 
 ### Admin Status
 
@@ -320,7 +321,7 @@ Audience-based top-level structure is complete and stable:
 |---|---|---|
 | storage (R2) | Complete | Presigned upload/read URLs. `infrastructure/storage/`. Mounts at `/api/v1/r2/`. |
 | cache (Redis) | Not started | Redis pub/sub helpers, key management utilities |
-| realtime | Not started | WebSocket chatroom — planned feature |
+| realtime | In progress | Redis pub/sub event publisher added for announcements (`infrastructure/realtime/service/announcement_events.py`), WebSocket live stream endpoint added at `GET ws /api/v1/realtime/announcements/ws` (subscribes to Redis channel `announcements.live`), optional FCM topic push dispatch added for announcement create/update when `FCM_SERVER_KEY` is configured (`infrastructure/realtime/service/push_notifications.py`). Announcement realtime/push dispatch now runs through DB post-commit hooks (`db/post_commit.py`) to preserve commit-then-publish semantics. |
 
 ---
 
