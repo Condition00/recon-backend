@@ -112,7 +112,7 @@ backend/app/
       controller/               # auth_controller.py, user_controller.py
       router/                   # auth_router.py (/auth/*), user_router.py (/users/*)
       tests/
-    participants/               # SCAFFOLD ONLY
+    participants/               # IMPLEMENTED — profile, discovery, check-in, talent visibility
     zones/                      # SCAFFOLD ONLY
     points/                     # SCAFFOLD ONLY
     shop/                       # SCAFFOLD ONLY
@@ -293,7 +293,7 @@ Audience-based top-level structure is complete and stable:
 |---|---|---|
 | auth | Complete | Google OAuth, JWT tokens, refresh/logout |
 | users | Complete | CRUD, role assignment, RBAC seeding. Roles: admin/participant/partner. No applicant role. |
-| participants | Not started | Profile, QR check-in, NFC token assignment |
+| participants | In progress | Profile creation/update, participant discovery, admin list/filter, admin check-in, talent visibility toggle. QR endpoint intentionally deferred because Luma handles ticketing; NFC persistence deferred. |
 | zones | Not started | Capacity, queue, status (red/amber/green) |
 | points | Not started | Passport economy, earn/spend, leaderboard |
 | schedule | Not started | Sessions, announcements, zone map data |

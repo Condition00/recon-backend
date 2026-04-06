@@ -29,7 +29,10 @@ async def submit_partner_application(
     for incentive_payload in payload.incentives:
         await create_incentive(db, partner_id=partner.id, payload=incentive_payload)
 
-    return partner
+    hydrated_partner = await get_partner_by_id(db, partner.id)
+    if not hydrated_partner:
+        raise HTTPException(status_code=500, detail="Failed to load created partner application")
+    return hydrated_partner
 
 
 async def get_my_partner_profile(db: AsyncSession, *, user: User) -> Partner:
@@ -67,7 +70,10 @@ async def review_partner_application(
     if payload.status == PartnerStatus.approved:
         await _assign_partner_role(db, partner.user_id)
 
-    return partner
+    hydrated_partner = await get_partner_by_id(db, partner.id)
+    if not hydrated_partner:
+        raise HTTPException(status_code=500, detail="Failed to load reviewed partner application")
+    return hydrated_partner
 
 
 async def _assign_partner_role(db: AsyncSession, user_id: uuid.UUID) -> None:
