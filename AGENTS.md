@@ -103,6 +103,10 @@ backend/app/
       router/                   # r2_router.py — GET /r2/upload-url, /r2/read-url
       schemas/                  # r2_schemas.py — PresignedUploadResponse, PresignedReadResponse
       tests/
+    cache/                      # Redis helpers — no HTTP endpoints, service-only
+      service/
+        cache_service.py        # get, set, delete, publish, sorted-set, counter helpers
+        keys.py                 # Key namespace constants and builders (recon:{domain}:{entity}:{id})
   domains/                      # Participant-facing event features — vertical slices
     auth/                       # COMPLETE — OAuth, JWT, user CRUD
       models/                   # user.py, role.py, oauth_account.py, refresh_token.py
@@ -279,6 +283,7 @@ Audience-based top-level structure is complete and stable:
 
 - **`utils/`** — flat files only: `deps.py`, `exceptions.py`, `rbac.py`, `models/base.py`
 - **`infrastructure/storage/`** — fully implemented: R2 presigned upload/read URLs via boto3. Mounts at `/api/v1/r2/`
+- **`infrastructure/cache/`** — fully implemented: Redis helpers (get/set with TTL, pub/sub, sorted-set leaderboard, counters) + namespaced key builders. Service-only, no HTTP endpoints.
 - **`domains/auth/`** — fully implemented: Google OAuth, JWT tokens, refresh/logout, user CRUD, RBAC seeding
 - **`domains/announcements/`** — implemented: active feed + admin publish/edit/delete routes with expiry/pinning support
 - **`admin/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
@@ -297,7 +302,7 @@ Audience-based top-level structure is complete and stable:
 | zones | Not started | Capacity, queue, status (red/amber/green) |
 | points | Not started | Passport economy, earn/spend, leaderboard |
 | schedule | Not started | Sessions, announcements, zone map data |
-| incidents | Not started | Webhook ingestion from n8n/Google Forms |
+| incidents | Complete | Incident tracking layer: webhooks ingestion, ops assignment, and status lifecycle |
 | webhooks | Not started | n8n form payload ingestion |
 | shop | Not started | Redemption store |
 | teams | Not started | Team formation and management |
@@ -320,8 +325,13 @@ Audience-based top-level structure is complete and stable:
 | Capability | Status | Notes |
 |---|---|---|
 | storage (R2) | Complete | Presigned upload/read URLs. `infrastructure/storage/`. Mounts at `/api/v1/r2/`. |
+<<<<<<< feature/cache-domain
+| cache (Redis) | Complete | Redis helpers (get/set, pub/sub, sorted-set, counters) + namespaced key builders. `infrastructure/cache/`. No HTTP endpoints. |
+| realtime | Not started | WebSocket chatroom — planned feature |
+=======
 | cache (Redis) | Not started | Redis pub/sub helpers, key management utilities |
 | realtime | In progress | Redis pub/sub event publisher added for announcements (`infrastructure/realtime/service/announcement_events.py`), WebSocket live stream endpoint added at `GET ws /api/v1/realtime/announcements/ws` (subscribes to Redis channel `announcements.live`), optional FCM topic push dispatch added for announcement create/update when `FCM_SERVER_KEY` is configured (`infrastructure/realtime/service/push_notifications.py`). Announcement realtime/push dispatch now runs through DB post-commit hooks (`db/post_commit.py`) to preserve commit-then-publish semantics. |
+>>>>>>> main
 
 ---
 
