@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -6,6 +7,9 @@ from sqlalchemy.pool import AsyncAdaptedQueuePool
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
+from app.db.post_commit import pop_post_commit_hooks
+
+logger = logging.getLogger(__name__)
 
 # Pool configuration for serverless databases (Supabase/NeonDB)
 DB_POOL_SIZE = 5
@@ -40,6 +44,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         try:
             yield session
             await session.commit()
+            hooks = pop_post_commit_hooks(session)
+            for hook in hooks:
+                try:
+                    await hook()
+                except Exception:
+                    logger.exception("Post-commit hook failed")
         except Exception:
+            pop_post_commit_hooks(session)
             await session.rollback()
             raise

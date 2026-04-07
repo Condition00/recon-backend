@@ -116,12 +116,12 @@ backend/app/
       controller/               # auth_controller.py, user_controller.py
       router/                   # auth_router.py (/auth/*), user_router.py (/users/*)
       tests/
-    participants/               # SCAFFOLD ONLY
+    participants/               # IMPLEMENTED — profile, discovery, check-in, talent visibility
     zones/                      # SCAFFOLD ONLY
     points/                     # SCAFFOLD ONLY
     shop/                       # SCAFFOLD ONLY
     schedule/                   # SCAFFOLD ONLY
-    announcements/              # SCAFFOLD ONLY
+    announcements/              # IMPLEMENTED — active feed + admin publish/edit/delete
     teams/                      # SCAFFOLD ONLY
     incidents/                  # SCAFFOLD ONLY
     webhooks/                   # SCAFFOLD ONLY
@@ -285,9 +285,10 @@ Audience-based top-level structure is complete and stable:
 - **`infrastructure/storage/`** — fully implemented: R2 presigned upload/read URLs via boto3. Mounts at `/api/v1/r2/`
 - **`infrastructure/cache/`** — fully implemented: Redis helpers (get/set with TTL, pub/sub, sorted-set leaderboard, counters) + namespaced key builders. Service-only, no HTTP endpoints.
 - **`domains/auth/`** — fully implemented: Google OAuth, JWT tokens, refresh/logout, user CRUD, RBAC seeding
+- **`domains/announcements/`** — implemented: active feed + admin publish/edit/delete routes with expiry/pinning support
 - **`admin/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
 - **`partners/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
-- All other participant domain folders are scaffolded (empty `__init__.py` files only)
+- Remaining participant domain folders are scaffolded (empty `__init__.py` files only)
 - `app/models/__init__.py` is the Alembic aggregator — import new domain models here when added
 - `api/v1/api.py` mounts all routers (domains + admin + partners + infrastructure)
 
@@ -297,7 +298,7 @@ Audience-based top-level structure is complete and stable:
 |---|---|---|
 | auth | Complete | Google OAuth, JWT tokens, refresh/logout |
 | users | Complete | CRUD, role assignment, RBAC seeding. Roles: admin/participant/partner. No applicant role. |
-| participants | Not started | Profile, QR check-in, NFC token assignment |
+| participants | In progress | Profile creation/update, participant discovery, admin list/filter, admin check-in, talent visibility toggle. QR endpoint intentionally deferred because Luma handles ticketing; NFC persistence deferred. |
 | zones | Not started | Capacity, queue, status (red/amber/green) |
 | points | Not started | Passport economy, earn/spend, leaderboard |
 | schedule | Not started | Sessions, announcements, zone map data |
@@ -305,7 +306,7 @@ Audience-based top-level structure is complete and stable:
 | webhooks | Not started | n8n form payload ingestion |
 | shop | Not started | Redemption store |
 | teams | Not started | Team formation and management |
-| announcements | Not started | Push/broadcast announcements |
+| announcements | Complete (initial API) | Active feed (`GET /announcements`, `GET /announcements/{id}`), admin publish/edit/delete (`POST /announcements`, `PATCH /announcements/{id}`, `DELETE /announcements/{id}`), fields: priority/published_at/expires_at/is_pinned/created_by. Table: `announcements`. Migration: `d1f2a3b4c5d6`. Realtime pub/sub events published on create/update/delete to Redis channel `announcements.live`. |
 
 ### Admin Status
 
@@ -317,15 +318,20 @@ Audience-based top-level structure is complete and stable:
 
 | Surface | Status | Notes |
 |---|---|---|
-| partners | Not started | Post-event ROI metrics, footfall data, engagement stats, booth management |
+| partners | Complete (models, schemas, CRUD, service, controller, router) | Application form, incentives (+ add more), asset uploads, admin review/approval, role promotion on approval. Tables: `partners`, `partner_incentives`, `partner_assets`, `partner_reports`. Migration: `cb0dd356e35b`. |
 
 ### Infrastructure Status
 
 | Capability | Status | Notes |
 |---|---|---|
 | storage (R2) | Complete | Presigned upload/read URLs. `infrastructure/storage/`. Mounts at `/api/v1/r2/`. |
+<<<<<<< feature/cache-domain
 | cache (Redis) | Complete | Redis helpers (get/set, pub/sub, sorted-set, counters) + namespaced key builders. `infrastructure/cache/`. No HTTP endpoints. |
 | realtime | Not started | WebSocket chatroom — planned feature |
+=======
+| cache (Redis) | Not started | Redis pub/sub helpers, key management utilities |
+| realtime | In progress | Redis pub/sub event publisher added for announcements (`infrastructure/realtime/service/announcement_events.py`), WebSocket live stream endpoint added at `GET ws /api/v1/realtime/announcements/ws` (subscribes to Redis channel `announcements.live`), optional FCM topic push dispatch added for announcement create/update when `FCM_SERVER_KEY` is configured (`infrastructure/realtime/service/push_notifications.py`). Announcement realtime/push dispatch now runs through DB post-commit hooks (`db/post_commit.py`) to preserve commit-then-publish semantics. |
+>>>>>>> main
 
 ---
 

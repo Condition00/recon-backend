@@ -12,3 +12,6 @@ wheels/
 
 # Directories
 AGENT
+
+#local redis data
+dump.rdb

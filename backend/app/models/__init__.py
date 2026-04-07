@@ -4,3 +4,13 @@ from app.domains.auth.models import (  # noqa: F401
     RefreshToken, RefreshTokenBase,
     OAuthAccount, OAuthAccountBase,
 )
+from app.domains.announcements.models import (  # noqa: F401
+    Announcement, AnnouncementBase, AnnouncementPriority,
+)
+from app.partners.models import (  # noqa: F401
+    Partner, PartnerBase, PartnerStatus, SponsorshipType,
+    PartnerIncentive, PartnerIncentiveBase, IncentiveType,
+    PartnerAsset, PartnerAssetBase, AssetType,
+    PartnerReport, PartnerReportBase,
+)
+from app.domains.participants.models import Participant, ParticipantBase  # noqa: F401

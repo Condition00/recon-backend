@@ -101,6 +101,9 @@ class Settings(BaseSettings):
     LOGFIRE_TOKEN: str = ""
     LOGFIRE_ENVIRONMENT: str = "Staging"
 
+    FCM_SERVER_KEY: str = ""
+    FCM_TOPIC: str = "participants"
+
     REDIS_URL: str = ""
 
 settings = Settings()
