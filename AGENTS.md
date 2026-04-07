@@ -302,7 +302,7 @@ Audience-based top-level structure is complete and stable:
 | zones | Not started | Capacity, queue, status (red/amber/green) |
 | points | Not started | Passport economy, earn/spend, leaderboard |
 | schedule | Not started | Sessions, announcements, zone map data |
-| incidents | Not started | Webhook ingestion from n8n/Google Forms |
+| incidents | Complete | Incident tracking layer: webhooks ingestion, ops assignment, and status lifecycle |
 | webhooks | Not started | n8n form payload ingestion |
 | shop | Not started | Redemption store |
 | teams | Not started | Team formation and management |
