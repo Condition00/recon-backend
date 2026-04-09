@@ -114,8 +114,8 @@ backend/app/
       tests/
     participants/               # IMPLEMENTED — profile, discovery, check-in, talent visibility
     zones/                      # SCAFFOLD ONLY
-    points/                     # SCAFFOLD ONLY
-    shop/                       # SCAFFOLD ONLY
+    points/                     # PARTIAL — point_ledger table defined; service layer TBD
+    shop/                       # IMPLEMENTED — catalogue, redemption, fulfillment, points integration
     schedule/                   # SCAFFOLD ONLY
     announcements/              # IMPLEMENTED — active feed + admin publish/edit/delete
     teams/                      # SCAFFOLD ONLY
@@ -295,11 +295,11 @@ Audience-based top-level structure is complete and stable:
 | users | Complete | CRUD, role assignment, RBAC seeding. Roles: admin/participant/partner. No applicant role. |
 | participants | In progress | Profile creation/update, participant discovery, admin list/filter, admin check-in, talent visibility toggle. QR endpoint intentionally deferred because Luma handles ticketing; NFC persistence deferred. |
 | zones | Not started | Capacity, queue, status (red/amber/green) |
-| points | Not started | Passport economy, earn/spend, leaderboard |
+| points | Partial (model only) | `point_ledger` table created (append-only ledger: participant_id, amount, reason, recorded_at). Service layer not yet built — shop domain uses stop-gap helpers for balance/spend. |
 | schedule | Not started | Sessions, announcements, zone map data |
 | incidents | Not started | Webhook ingestion from n8n/Google Forms |
 | webhooks | Not started | n8n form payload ingestion |
-| shop | Not started | Redemption store |
+| shop | Complete (initial API) | Full catalogue + redemption store. Tables: `shop_items`, `redemptions`. 8 endpoints: `GET /shop` (list active), `GET /shop/{id}` (detail), `POST /shop/{id}/redeem` (participant redeem with balance check + stock lock), `GET /shop/me/redemptions` (own history), `GET /shop/redemptions` (admin list, filterable by fulfilled), `PATCH /shop/redemptions/{id}/fulfill` (admin fulfillment), `POST /shop` (admin create), `PATCH /shop/{id}` (admin update/toggle). Concurrent stock safety via `SELECT FOR UPDATE`. Points deducted via `point_ledger` with reason `shop.redeem.<item_name>`. Mounts at `/api/v1/shop/`. |
 | teams | Not started | Team formation and management |
 | announcements | Complete (initial API) | Active feed (`GET /announcements`, `GET /announcements/{id}`), admin publish/edit/delete (`POST /announcements`, `PATCH /announcements/{id}`, `DELETE /announcements/{id}`), fields: priority/published_at/expires_at/is_pinned/created_by. Table: `announcements`. Migration: `d1f2a3b4c5d6`. Realtime pub/sub events published on create/update/delete to Redis channel `announcements.live`. |
 

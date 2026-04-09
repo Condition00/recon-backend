@@ -6,6 +6,7 @@ from app.infrastructure.realtime.router import router as realtime_router
 from app.domains.participants.router import router as participants_router
 from app.infrastructure.storage.router import router as r2_router
 from app.partners.router import router as partners_router
+from app.domains.shop.router import router as shop_router
 
 router = APIRouter()
 
@@ -15,3 +16,4 @@ router.include_router(realtime_router)
 router.include_router(participants_router)
 router.include_router(r2_router)
 router.include_router(partners_router)
+router.include_router(shop_router)
