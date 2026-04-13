@@ -90,8 +90,8 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
     # Production
-    "https://traction-ai.me",
-    "https://www.traction-ai.me",
+    "https://reconhq.tech",
+    "https://www.reconhq.tech",
 ]
 
 app.add_middleware(

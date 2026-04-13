@@ -282,7 +282,7 @@ Agents MUST update this section after completing any meaningful change — domai
 Audience-based top-level structure is complete and stable:
 
 - **`utils/`** — flat files only: `deps.py`, `exceptions.py`, `rbac.py`, `models/base.py`
-- **`infrastructure/storage/`** — fully implemented: R2 presigned upload/read URLs via boto3. Mounts at `/api/v1/r2/`
+- **`infrastructure/storage/`** — fully implemented: R2 presigned upload/read URLs via boto3 with namespace-aware authorization for read access. Mounts at `/api/v1/r2/`
 - **`infrastructure/cache/`** — fully implemented: Redis helpers (get/set with TTL, pub/sub, sorted-set leaderboard, counters) + namespaced key builders. Service-only, no HTTP endpoints.
 - **`domains/auth/`** — fully implemented: Google OAuth, JWT tokens, refresh/logout, user CRUD, RBAC seeding
 - **`domains/announcements/`** — implemented: active feed + admin publish/edit/delete routes with expiry/pinning support
@@ -324,7 +324,7 @@ Audience-based top-level structure is complete and stable:
 
 | Capability | Status | Notes |
 |---|---|---|
-| storage (R2) | Complete | Presigned upload/read URLs. `infrastructure/storage/`. Mounts at `/api/v1/r2/`. |
+| storage (R2) | Complete | Presigned upload/read URLs with namespace-aware private/public authorization. `infrastructure/storage/`. Mounts at `/api/v1/r2/`. |
 <<<<<<< feature/cache-domain
 | cache (Redis) | Complete | Redis helpers (get/set, pub/sub, sorted-set, counters) + namespaced key builders. `infrastructure/cache/`. No HTTP endpoints. |
 | realtime | Not started | WebSocket chatroom — planned feature |
