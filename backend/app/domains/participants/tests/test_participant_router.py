@@ -66,6 +66,7 @@ async def test_other_authenticated_user_sees_read_only_participant_view(client, 
     assert get_response.json()["can_edit"] is False
     assert get_response.json()["linkedin_acc"] is None
     assert get_response.json()["phone"] is None
+    assert get_response.json()["profile_photo_file_key"] is None
 
 
 @pytest.mark.asyncio

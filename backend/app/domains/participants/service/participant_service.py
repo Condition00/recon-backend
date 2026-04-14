@@ -122,6 +122,7 @@ def _serialize_participant(
         participant.talent_visible and participant.talent_contact_shareable
     )
     can_view_social = is_owner or is_admin or participant.talent_visible
+    can_view_profile_photo = is_owner or is_admin or participant.talent_visible
 
     return ParticipantRead(
         id=participant.id,
@@ -133,7 +134,7 @@ def _serialize_participant(
         github_acc=participant.github_acc if can_view_social else None,
         x_acc=participant.x_acc if can_view_social else None,
         phone=participant.phone if can_view_contact else None,
-        profile_photo_file_key=participant.profile_photo_file_key,
+        profile_photo_file_key=participant.profile_photo_file_key if can_view_profile_photo else None,
         talent_visible=participant.talent_visible,
         talent_contact_shareable=participant.talent_contact_shareable,
         checked_in_at=participant.checked_in_at if (is_owner or is_admin) else None,

@@ -4,9 +4,7 @@ from app.domains.auth.models import (  # noqa: F401
     RefreshToken, RefreshTokenBase,
     OAuthAccount, OAuthAccountBase,
 )
-from app.domains.announcements.models import (  # noqa: F401
-    Announcement, AnnouncementBase, AnnouncementPriority,
-)
+from app.domains.incidents.models import Incident  # noqa: F401
 from app.partners.models import (  # noqa: F401
     Partner, PartnerBase, PartnerStatus, SponsorshipType,
     PartnerIncentive, PartnerIncentiveBase, IncentiveType,
@@ -18,4 +16,11 @@ from app.domains.points.models import PointLedgerEntry, PointLedgerEntryBase  # 
 from app.domains.shop.models import (  # noqa: F401
     ShopItem, ShopItemBase,
     Redemption, RedemptionBase,
+)
+
+from app.domains.schedule.models import (  # noqa: F401
+    Session, SessionBase,
+    Speaker, SpeakerBase,
+    SessionSpeaker, SessionSpeakerBase,
+    SessionType,
 )
