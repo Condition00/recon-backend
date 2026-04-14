@@ -12,3 +12,10 @@ from app.partners.models import (  # noqa: F401
     PartnerReport, PartnerReportBase,
 )
 from app.domains.participants.models import Participant, ParticipantBase  # noqa: F401
+
+from app.domains.schedule.models import (  # noqa: F401
+    Session, SessionBase,
+    Speaker, SpeakerBase,
+    SessionSpeaker, SessionSpeakerBase,
+    SessionType,
+)
