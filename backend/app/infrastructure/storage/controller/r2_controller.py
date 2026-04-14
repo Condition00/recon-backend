@@ -140,4 +140,3 @@ async def _authorize_read(db: AsyncSession, *, current_user: User, file_key: str
 
 def _is_admin(current_user: User) -> bool:
     return current_user.role is not None and current_user.role.name == ROLE_ADMIN
-dResponse(read_url=url, file_key=file_key)

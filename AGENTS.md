@@ -284,7 +284,7 @@ Audience-based top-level structure is complete and stable:
 - **`utils/`** — flat files only: `deps.py`, `exceptions.py`, `rbac.py`, `models/base.py`
 - **`infrastructure/storage/`** — fully implemented: R2 presigned upload/read URLs via boto3 with namespace-aware authorization for read access. Mounts at `/api/v1/r2/`
 - **`infrastructure/cache/`** — fully implemented: Redis helpers (get/set with TTL, pub/sub, sorted-set leaderboard, counters) + namespaced key builders. Service-only, no HTTP endpoints.
-- **`domains/auth/`** — fully implemented: Google OAuth, JWT tokens, refresh/logout, user CRUD, RBAC seeding
+- **`domains/auth/`** — fully implemented: Google OAuth, JWT tokens, refresh/logout, user CRUD, RBAC seeding, settings-driven OAuth/callback URLs
 - **`domains/announcements/`** — implemented: active feed + admin publish/edit/delete routes with expiry/pinning support
 - **`admin/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
 - **`partners/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
@@ -296,7 +296,7 @@ Audience-based top-level structure is complete and stable:
 
 | Domain | Status | Notes |
 |---|---|---|
-| auth | Complete | Google OAuth, JWT tokens, refresh/logout |
+| auth | Complete | Google OAuth, JWT tokens, refresh/logout, settings-driven callback/redirect URLs, hardened session/trusted-host middleware wiring |
 | users | Complete | CRUD, role assignment, RBAC seeding. Roles: admin/participant/partner. No applicant role. |
 | participants | In progress | Profile creation/update, participant discovery, admin list/filter, admin check-in, talent visibility toggle. QR endpoint intentionally deferred because Luma handles ticketing; NFC persistence deferred. |
 | zones | Not started | Capacity, queue, status (red/amber/green) |
