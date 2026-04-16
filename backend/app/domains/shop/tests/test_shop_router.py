@@ -15,7 +15,7 @@ async def _seed_points(session_factory, *, actor, participant_id: uuid.UUID, amo
             reason="test.seed",
             idempotency_key=f"test.seed.{uuid.uuid4().hex}",
         )
-        await award_points(session, payload=payload, actor=actor, redis=None)
+        await award_points(session, payload=payload, actor=actor)
         await session.commit()
 
 
@@ -416,9 +416,6 @@ async def test_redeem_immediately_keeps_points_rank_and_dashboard_consistent(
             },
         )
         assert response.status_code == 201
-
-    rebuild = await client.post("/api/v1/points/leaderboard/cache/rebuild")
-    assert rebuild.status_code == 200
 
     create_item = await client.post(
         "/api/v1/shop/",

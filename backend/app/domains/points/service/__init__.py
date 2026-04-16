@@ -4,11 +4,9 @@ import re
 import uuid
 
 from fastapi import HTTPException, status
-from redis.asyncio import Redis
 from sqlalchemy.exc import IntegrityError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.db.post_commit import add_post_commit_hook
 from app.domains.auth.models import User
 from app.domains.participants.crud import get_participant_by_user_id
 from app.domains.points import crud
@@ -19,15 +17,9 @@ from app.domains.points.schemas import (
     PointLeaderboardMeRead,
     PointLeaderboardPageRead,
     PointMeRead,
-    PointOutboxDrainRead,
     PointTransactionRead,
     PointTransactionsPageRead,
 )
-from app.domains.points.service.outbox_dispatcher import (
-    OUTBOX_EVENT_POINTS_AWARDED,
-    drain_points_outbox,
-)
-from app.infrastructure.cache.service import cache_service, keys
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +31,6 @@ async def award_points(
     *,
     payload: PointAwardCreate,
     actor: User,
-    redis: Redis | None = None,
 ) -> tuple[PointLedger, int]:
     _validate_award_payload(payload)
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -98,18 +89,6 @@ async def award_points(
         total_points=projected_balance,
         last_activity_at=entry.created_at,
     )
-    await crud.enqueue_outbox_event(
-        db,
-        event_type=OUTBOX_EVENT_POINTS_AWARDED,
-        participant_id=payload.participant_id,
-        delta=payload.amount,
-        resulting_balance=projected_balance,
-        last_activity_at=entry.created_at,
-        next_attempt_at=now,
-    )
-
-    if redis is not None:
-        add_post_commit_hook(db, _drain_outbox_post_commit_hook(db, redis))
 
     return entry, projected_balance
 
@@ -137,7 +116,6 @@ async def get_leaderboard(
     *,
     skip: int,
     limit: int,
-    redis: Redis | None = None,
 ) -> PointLeaderboardPageRead:
     total_ranked, rows = await crud.get_leaderboard_page(db, skip=skip, limit=limit)
     entries = [
@@ -153,7 +131,7 @@ async def get_leaderboard(
 
 
 async def get_my_rank(
-    db: AsyncSession, *, user: User, redis: Redis | None = None
+    db: AsyncSession, *, user: User
 ) -> PointLeaderboardMeRead:
     participant = await get_participant_by_user_id(db, user.id)
     if not participant:
@@ -215,64 +193,6 @@ async def get_transactions_for_admin(
     )
 
 
-async def rebuild_leaderboard_cache(
-    db: AsyncSession,
-    *,
-    redis: Redis | None,
-) -> int:
-    if redis is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Redis unavailable for cache rebuild",
-        )
-
-    totals = await crud.list_projection_totals(db)
-    leaderboard_key = keys.leaderboard()
-    temp_key = keys.leaderboard_rebuild_tmp()
-
-    await cache_service.delete(redis, temp_key)
-    for participant_id, points, last_activity_at in totals:
-        participant_key = str(participant_id)
-        await cache_service.zadd(redis, temp_key, participant_key, float(points))
-        await cache_service.set(redis, keys.participant_points(participant_key), points)
-        await cache_service.set(
-            redis,
-            keys.participant_points_last_activity(participant_key),
-            int(last_activity_at.timestamp()),
-        )
-
-    if totals:
-        await cache_service.rename(redis, temp_key, leaderboard_key)
-    else:
-        await cache_service.delete(redis, leaderboard_key)
-    await cache_service.publish(
-        redis,
-        keys.channel_leaderboard(),
-        {"event": "leaderboard.rebuilt", "total_ranked": len(totals)},
-    )
-    return len(totals)
-
-
-async def drain_outbox_now(
-    db: AsyncSession,
-    *,
-    redis: Redis | None,
-    limit: int = 200,
-) -> PointOutboxDrainRead:
-    if redis is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Redis unavailable for outbox drain",
-        )
-    result = await drain_points_outbox(db, redis=redis, limit=limit)
-    return PointOutboxDrainRead(
-        processed=result.processed,
-        sent=result.sent,
-        failed=result.failed,
-        remaining_ready=result.remaining_ready,
-    )
-
-
 def serialize_transaction(tx: PointLedger) -> PointTransactionRead:
     return PointTransactionRead(
         id=tx.id,
@@ -318,21 +238,6 @@ def _ensure_same_idempotent_payload(
             status_code=status.HTTP_409_CONFLICT,
             detail="idempotency_key already exists for a different payload",
         )
-
-
-def _drain_outbox_post_commit_hook(db: AsyncSession, redis: Redis):
-    async def _hook() -> None:
-        try:
-            # Keep request-path drain opportunistic; bulk recovery is handled by daemon/admin drain.
-            await drain_points_outbox(db, redis=redis, limit=20)
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            logger.exception("Failed to drain points outbox in post-commit hook")
-
-    return _hook
-
-
 def _normalize_utc_datetime(
     value: datetime.datetime | None, *, field_name: str
 ) -> datetime.datetime | None:

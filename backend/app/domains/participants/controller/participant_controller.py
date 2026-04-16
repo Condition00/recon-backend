@@ -1,6 +1,5 @@
 import uuid
 
-from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.auth.models import User
@@ -36,10 +35,8 @@ async def get_me(db: AsyncSession, user: User) -> ParticipantRead:
     return serialize_participant_for_user(participant, user)
 
 
-async def get_dashboard(
-    db: AsyncSession, *, user: User, redis: Redis | None
-) -> ParticipantDashboardRead:
-    return await get_my_dashboard(db, user=user, redis=redis)
+async def get_dashboard(db: AsyncSession, *, user: User) -> ParticipantDashboardRead:
+    return await get_my_dashboard(db, user=user)
 
 
 async def update_me(db: AsyncSession, user: User, payload: ParticipantUpdate) -> ParticipantRead:

@@ -1,10 +1,7 @@
 from app.domains.points.crud.point_ledger import (
-    claim_pending_outbox_events,
     count_transactions,
-    count_pending_outbox_events,
     create_projection,
     create_ledger_entry,
-    enqueue_outbox_event,
     get_balance_for_participant,
     get_entry_by_idempotency_key,
     get_leaderboard_page,
@@ -13,20 +10,14 @@ from app.domains.points.crud.point_ledger import (
     get_participant_rank_and_balance,
     get_projection_for_update,
     list_participant_transactions,
-    list_projection_totals,
     list_transactions,
-    mark_outbox_failed,
-    mark_outbox_sent,
     update_projection,
 )
 
 __all__ = [
-    "claim_pending_outbox_events",
     "count_transactions",
-    "count_pending_outbox_events",
     "create_projection",
     "create_ledger_entry",
-    "enqueue_outbox_event",
     "get_balance_for_participant",
     "get_entry_by_idempotency_key",
     "get_leaderboard_page",
@@ -35,9 +26,6 @@ __all__ = [
     "get_participant_rank_and_balance",
     "get_projection_for_update",
     "list_participant_transactions",
-    "list_projection_totals",
     "list_transactions",
-    "mark_outbox_failed",
-    "mark_outbox_sent",
     "update_projection",
 ]
