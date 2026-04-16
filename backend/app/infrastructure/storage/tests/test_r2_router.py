@@ -16,7 +16,7 @@ class _FakeR2Service:
 @pytest.fixture(autouse=True)
 def fake_r2_service(monkeypatch):
     monkeypatch.setattr(
-        "app.infrastructure.storage.controller.r2_controller.get_r2_service",
+        "app.infrastructure.storage.controller.s3_controller.get_r2_service",
         lambda: _FakeR2Service(),
     )
 

@@ -139,11 +139,6 @@ async def get_leaderboard(
     limit: int,
     redis: Redis | None = None,
 ) -> PointLeaderboardPageRead:
-    if redis is not None:
-        cached = await _get_leaderboard_from_cache(db, redis=redis, skip=skip, limit=limit)
-        if cached is not None:
-            return cached
-
     total_ranked, rows = await crud.get_leaderboard_page(db, skip=skip, limit=limit)
     entries = [
         PointLeaderboardEntry(
@@ -163,17 +158,6 @@ async def get_my_rank(
     participant = await get_participant_by_user_id(db, user.id)
     if not participant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant profile not found")
-
-    if redis is not None:
-        cached_rank = await _get_rank_from_cache(redis=redis, participant_id=participant.id)
-        if cached_rank is not None:
-            rank, total_ranked, points = cached_rank
-            return PointLeaderboardMeRead(
-                participant_id=participant.id,
-                rank=rank,
-                total_ranked=total_ranked,
-                points=points,
-            )
 
     rank, total_ranked, points = await crud.get_participant_rank_and_balance(
         db, participant_id=participant.id
@@ -334,73 +318,6 @@ def _ensure_same_idempotent_payload(
             status_code=status.HTTP_409_CONFLICT,
             detail="idempotency_key already exists for a different payload",
         )
-
-
-async def _get_leaderboard_from_cache(
-    db: AsyncSession,
-    *,
-    redis: Redis,
-    skip: int,
-    limit: int,
-) -> PointLeaderboardPageRead | None:
-    try:
-        total_ranked = await cache_service.zcard(redis, keys.leaderboard())
-        if total_ranked == 0:
-            return None
-        page = await cache_service.zrevrange_with_scores(
-            redis, keys.leaderboard(), skip, skip + limit - 1
-        )
-    except Exception:
-        logger.exception("Failed to load leaderboard page from cache")
-        return None
-
-    parsed_page: list[tuple[uuid.UUID, int]] = []
-    for member, score in page:
-        try:
-            parsed_page.append((uuid.UUID(str(member)), int(score)))
-        except Exception:
-            logger.warning("Skipping invalid leaderboard cache member=%s", member)
-
-    page_ids = [participant_id for participant_id, _ in parsed_page]
-    name_map = await crud.get_participant_display_names(db, participant_ids=page_ids)
-
-    entries = [
-        PointLeaderboardEntry(
-            rank=skip + idx + 1,
-            participant_id=participant_id,
-            display_name=name_map.get(participant_id, str(participant_id)),
-            points=points,
-        )
-        for idx, (participant_id, points) in enumerate(parsed_page)
-    ]
-    return PointLeaderboardPageRead(total_ranked=total_ranked, skip=skip, limit=limit, entries=entries)
-
-
-async def _get_rank_from_cache(
-    *,
-    redis: Redis,
-    participant_id: uuid.UUID,
-) -> tuple[int | None, int, int] | None:
-    try:
-        participant_key = str(participant_id)
-        total_ranked = await cache_service.zcard(redis, keys.leaderboard())
-        if total_ranked == 0:
-            return None
-
-        rank = await cache_service.zrevrank(redis, keys.leaderboard(), participant_key)
-        if rank is None:
-            return None, total_ranked, 0
-
-        cached_points = await cache_service.get_int(
-            redis, keys.participant_points(participant_key)
-        )
-        if cached_points is None:
-            score = await cache_service.zscore(redis, keys.leaderboard(), participant_key)
-            cached_points = int(score) if score is not None else 0
-        return int(rank) + 1, total_ranked, int(cached_points)
-    except Exception:
-        logger.exception("Failed to load leaderboard rank from cache")
-        return None
 
 
 def _drain_outbox_post_commit_hook(db: AsyncSession, redis: Redis):

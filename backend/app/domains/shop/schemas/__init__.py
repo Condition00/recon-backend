@@ -5,6 +5,7 @@ from app.domains.shop.schemas.shop_item import (
 )
 from app.domains.shop.schemas.redemption import (
     RedemptionFulfill,
+    RedemptionRedeem,
     RedemptionRead,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "ShopItemRead",
     "ShopItemUpdate",
     "RedemptionFulfill",
+    "RedemptionRedeem",
     "RedemptionRead",
 ]

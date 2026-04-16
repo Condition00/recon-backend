@@ -10,6 +10,7 @@ from app.domains.shop.crud.redemption import (
     create_redemption,
     fulfill_redemption,
     get_redemption_by_id,
+    get_redemption_by_idempotency_key,
     list_all_redemptions,
     list_redemptions_by_participant,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "get_item_by_id",
     "get_item_for_update",
     "get_redemption_by_id",
+    "get_redemption_by_idempotency_key",
     "list_active_items",
     "list_all_redemptions",
     "list_redemptions_by_participant",

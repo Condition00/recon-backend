@@ -2,6 +2,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, status
+from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.database import get_db
@@ -19,12 +20,13 @@ from app.domains.shop.controller import (
 )
 from app.domains.shop.schemas import (
     RedemptionFulfill,
+    RedemptionRedeem,
     RedemptionRead,
     ShopItemCreate,
     ShopItemRead,
     ShopItemUpdate,
 )
-from app.utils.deps import get_current_user, require_roles
+from app.utils.deps import get_current_user, get_redis, require_roles
 
 router = APIRouter(prefix="/shop", tags=["shop"])
 
@@ -87,12 +89,21 @@ async def get_shop_item_route(
 @router.post("/{item_id}/redeem", response_model=RedemptionRead)
 async def redeem_item_route(
     item_id: uuid.UUID,
+    payload: RedemptionRedeem,
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
     user: User = Depends(get_current_user),
 ):
     """Redeem a shop item: checks balance, deducts points, decrements stock."""
     participant = await _require_participant(db, user)
-    return await redeem(db, item_id=item_id, participant_id=participant.id)
+    return await redeem(
+        db,
+        item_id=item_id,
+        participant_id=participant.id,
+        actor=user,
+        payload=payload,
+        redis=redis,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, status
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
@@ -8,6 +9,7 @@ from app.domains.auth.models import ROLE_ADMIN, User
 from app.domains.participants.controller import (
     check_in,
     create_me,
+    get_dashboard,
     get_me,
     get_one,
     list_all,
@@ -17,11 +19,12 @@ from app.domains.participants.controller import (
 from app.domains.participants.schemas import (
     ParticipantCheckInRead,
     ParticipantCreate,
+    ParticipantDashboardRead,
     ParticipantRead,
     ParticipantTalentVisibilityUpdate,
     ParticipantUpdate,
 )
-from app.utils.deps import get_current_user, require_roles
+from app.utils.deps import get_current_user, get_redis, require_roles
 
 router = APIRouter(prefix="/participants", tags=["participants"])
 
@@ -41,6 +44,15 @@ async def get_my_profile(
     user: User = Depends(get_current_user),
 ):
     return await get_me(db, user)
+
+
+@router.get("/me/dashboard", response_model=ParticipantDashboardRead)
+async def get_my_dashboard(
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+    user: User = Depends(get_current_user),
+):
+    return await get_dashboard(db, user=user, redis=redis)
 
 
 @router.patch("/me", response_model=ParticipantRead)

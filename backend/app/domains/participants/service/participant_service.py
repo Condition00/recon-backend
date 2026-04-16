@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
+from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.auth.models import ROLE_ADMIN, User
@@ -15,10 +16,13 @@ from app.domains.participants.crud import (
 from app.domains.participants.models import Participant
 from app.domains.participants.schemas import (
     ParticipantCreate,
+    ParticipantDashboardRead,
     ParticipantRead,
     ParticipantTalentVisibilityUpdate,
     ParticipantUpdate,
 )
+from app.domains.points.service import get_my_points_summary, get_my_rank
+from app.domains.zones.service.zone_summary_service import get_checked_in_zone_summary
 
 
 async def create_my_participant_profile(
@@ -109,6 +113,28 @@ def serialize_participant_list_item(participant: Participant) -> ParticipantRead
 
 def serialize_participant_for_user(participant: Participant, current_user: User) -> ParticipantRead:
     return _serialize_participant(participant, current_user=current_user)
+
+
+async def get_my_dashboard(
+    db: AsyncSession, *, user: User, redis: Redis | None = None
+) -> ParticipantDashboardRead:
+    participant = await get_my_participant_profile(db, user=user)
+
+    points = await get_my_points_summary(db, user=user, recent_limit=1)
+    rank = await get_my_rank(db, user=user, redis=redis)
+    checked_in_count, checked_in_zone_ids = await get_checked_in_zone_summary(
+        db, participant_id=participant.id
+    )
+
+    return ParticipantDashboardRead(
+        displayName=participant.display_name,
+        registrationId=participant.id,
+        pointsBalance=points.balance,
+        zonesCheckedInCount=checked_in_count,
+        checkedInZoneIds=checked_in_zone_ids,
+        eventsRegisteredCount=0,
+        leaderboardRank=rank.rank,
+    )
 
 
 def _serialize_participant(
