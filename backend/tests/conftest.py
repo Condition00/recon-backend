@@ -16,6 +16,7 @@ if str(ROOT_DIR) not in sys.path:
 
 import app.models  # noqa: F401
 from app.db.database import get_db
+from app.db.post_commit import pop_post_commit_hooks
 from app.domains.auth.models import ROLE_ADMIN, ROLE_PARTICIPANT, ROLE_PARTNER, Role, User
 from app.main import app
 from app.utils.deps import get_current_user
@@ -70,10 +71,15 @@ async def client(session_factory, seeded_roles) -> AsyncGenerator[AsyncClient, N
             try:
                 yield session
                 await session.commit()
+                hooks = pop_post_commit_hooks(session)
+                for hook in hooks:
+                    await hook()
             except Exception:
+                pop_post_commit_hooks(session)
                 await session.rollback()
                 raise
 
+    app.state.disable_points_outbox_daemon = True
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
     async with AsyncClient(
@@ -83,6 +89,8 @@ async def client(session_factory, seeded_roles) -> AsyncGenerator[AsyncClient, N
     ) as async_client:
         yield async_client
     app.dependency_overrides.clear()
+    if hasattr(app.state, "disable_points_outbox_daemon"):
+        delattr(app.state, "disable_points_outbox_daemon")
 
 
 @pytest_asyncio.fixture

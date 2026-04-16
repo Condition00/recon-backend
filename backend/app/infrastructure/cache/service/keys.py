@@ -45,6 +45,16 @@ def participant_points(participant_id: str) -> str:
     return _build(PREFIX, "points", "participant", participant_id)
 
 
+def participant_points_last_activity(participant_id: str) -> str:
+    """Cached last ledger activity timestamp (UTC epoch seconds)."""
+    return _build(PREFIX, "points", "participant_last_activity", participant_id)
+
+
+def leaderboard_rebuild_tmp() -> str:
+    """Temporary leaderboard key used during atomic cache rebuild."""
+    return _build(PREFIX, "points", "leaderboard_tmp")
+
+
 # ── Announcements keys ───────────────────────────────────────
 
 def announcements_latest() -> str:
