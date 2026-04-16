@@ -3,7 +3,6 @@ import uuid
 from typing import Optional
 
 from fastapi import HTTPException
-from redis.asyncio import Redis
 from sqlalchemy.exc import IntegrityError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -101,7 +100,6 @@ async def redeem_item(
     participant_id: uuid.UUID,
     actor: User,
     payload: RedemptionRedeem,
-    redis: Redis | None,
 ) -> RedemptionRead:
     """
     Atomic redeem: row-lock item → check active → check stock → check balance → deduct → create redemption.
@@ -154,7 +152,6 @@ async def redeem_item(
             request_idempotency_key=payload.idempotency_key,
         ),
         note=f"shop redemption for {item.name}",
-        redis=redis,
     )
 
     # 5. Create redemption record
@@ -231,7 +228,6 @@ async def _spend_points(
     actor: User,
     idempotency_key: str,
     note: str | None = None,
-    redis: Redis | None,
 ) -> PointLedgerEntry:
     """Spend points through the points domain service to preserve invariants."""
     payload = PointAwardCreate(
@@ -242,7 +238,7 @@ async def _spend_points(
         idempotency_key=idempotency_key,
         note=note,
     )
-    entry, _ = await award_points(db, payload=payload, actor=actor, redis=redis)
+    entry, _ = await award_points(db, payload=payload, actor=actor)
     return entry
 
 

@@ -1,116 +1,8 @@
-import asyncio
 import uuid
 
 import pytest
 
 from app.domains.auth.models import ROLE_ADMIN
-from app.infrastructure.cache.service import keys
-from app.main import app
-from app.utils.deps import get_redis
-
-
-class FakeRedis:
-    def __init__(self) -> None:
-        self.kv: dict[str, str | int | float] = {}
-        self.sorted_sets: dict[str, dict[str, float]] = {}
-        self.fail_publish = False
-        self.fail_zcard = False
-        self.fail_zrevrange = False
-        self.fail_rename = False
-
-    async def get(self, key: str):
-        return self.kv.get(key)
-
-    async def set(self, key: str, value, ex=None):
-        self.kv[key] = value
-
-    async def delete(self, *keys: str):
-        count = 0
-        for key in keys:
-            if key in self.kv:
-                del self.kv[key]
-                count += 1
-            if key in self.sorted_sets:
-                del self.sorted_sets[key]
-                count += 1
-        return count
-
-    async def scan(self, cursor=0, match=None, count=200):
-        return 0, []
-
-    async def publish(self, channel: str, payload):
-        if self.fail_publish:
-            raise RuntimeError("simulated publish failure")
-        return 0
-
-    async def rename(self, source_key: str, destination_key: str):
-        if self.fail_rename:
-            raise RuntimeError("simulated rename failure")
-        if source_key in self.sorted_sets:
-            self.sorted_sets[destination_key] = self.sorted_sets.pop(source_key)
-            return True
-        if source_key in self.kv:
-            self.kv[destination_key] = self.kv.pop(source_key)
-            return True
-        raise KeyError(source_key)
-
-    async def zadd(self, key: str, mapping: dict[str, float]):
-        bucket = self.sorted_sets.setdefault(key, {})
-        bucket.update(mapping)
-        return 1
-
-    async def zincrby(self, key: str, increment: float, member: str):
-        bucket = self.sorted_sets.setdefault(key, {})
-        bucket[member] = float(bucket.get(member, 0.0)) + float(increment)
-        return bucket[member]
-
-    async def zrevrank(self, key: str, member: str):
-        ranked = self._sorted_desc(key)
-        for idx, (m, _) in enumerate(ranked):
-            if m == member:
-                return idx
-        return None
-
-    async def zscore(self, key: str, member: str):
-        return self.sorted_sets.get(key, {}).get(member)
-
-    async def zrevrange(self, key: str, start: int, stop: int, withscores: bool = False):
-        if self.fail_zrevrange:
-            raise RuntimeError("simulated zrevrange failure")
-        ranked = self._sorted_desc(key)
-        if stop == -1:
-            sliced = ranked[start:]
-        else:
-            sliced = ranked[start : stop + 1]
-        if withscores:
-            return [(m, s) for m, s in sliced]
-        return [m for m, _ in sliced]
-
-    async def zcard(self, key: str):
-        if self.fail_zcard:
-            raise RuntimeError("simulated zcard failure")
-        return len(self.sorted_sets.get(key, {}))
-
-    def _sorted_desc(self, key: str) -> list[tuple[str, float]]:
-        bucket = self.sorted_sets.get(key, {})
-        return sorted(bucket.items(), key=lambda row: (-row[1], row[0]))
-
-
-@pytest.fixture
-def redis_override():
-    original = app.dependency_overrides.get(get_redis)
-    fake = FakeRedis()
-
-    async def _get_fake_redis():
-        return fake
-
-    app.dependency_overrides[get_redis] = _get_fake_redis
-    yield fake
-
-    if original is not None:
-        app.dependency_overrides[get_redis] = original
-    else:
-        app.dependency_overrides.pop(get_redis, None)
 
 
 async def _create_participant(client, auth_override, user, display_name: str) -> uuid.UUID:
@@ -128,7 +20,7 @@ async def _create_participant(client, auth_override, user, display_name: str) ->
 
 
 @pytest.mark.asyncio
-async def test_award_points_and_get_my_balance(client, auth_override, create_user, redis_override):
+async def test_award_points_and_get_my_balance(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_1@example.com", username="adminp1")
     player = await create_user(email="player_points_1@example.com", username="playerp1")
     participant_id = await _create_participant(client, auth_override, player, "ranker1")
@@ -155,7 +47,7 @@ async def test_award_points_and_get_my_balance(client, auth_override, create_use
 
 
 @pytest.mark.asyncio
-async def test_spend_cannot_push_balance_negative(client, auth_override, create_user, redis_override):
+async def test_spend_cannot_push_balance_negative(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_2@example.com", username="adminp2")
     player = await create_user(email="player_points_2@example.com", username="playerp2")
     participant_id = await _create_participant(client, auth_override, player, "ranker2")
@@ -186,9 +78,7 @@ async def test_spend_cannot_push_balance_negative(client, auth_override, create_
 
 
 @pytest.mark.asyncio
-async def test_idempotency_key_prevents_duplicate_mutations(
-    client, auth_override, create_user, redis_override
-):
+async def test_idempotency_key_prevents_duplicate_mutations(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_3@example.com", username="adminp3")
     player = await create_user(email="player_points_3@example.com", username="playerp3")
     participant_id = await _create_participant(client, auth_override, player, "ranker3")
@@ -217,7 +107,7 @@ async def test_idempotency_key_prevents_duplicate_mutations(
 
 
 @pytest.mark.asyncio
-async def test_leaderboard_and_my_rank(client, auth_override, create_user, redis_override):
+async def test_leaderboard_and_my_rank(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_4@example.com", username="adminp4")
     p1 = await create_user(email="player_points_4a@example.com", username="playerp4a")
     p2 = await create_user(email="player_points_4b@example.com", username="playerp4b")
@@ -228,33 +118,21 @@ async def test_leaderboard_and_my_rank(client, auth_override, create_user, redis
     id3 = await _create_participant(client, auth_override, p3, "gamma")
 
     auth_override(admin)
-    await client.post(
-        "/api/v1/points/award",
-        json={
-            "participant_id": str(id1),
-            "amount": 90,
-            "reason": "zone.lock_hunt.complete",
-            "idempotency_key": "board-1",
-        },
-    )
-    await client.post(
-        "/api/v1/points/award",
-        json={
-            "participant_id": str(id2),
-            "amount": 60,
-            "reason": "zone.lock_hunt.complete",
-            "idempotency_key": "board-2",
-        },
-    )
-    await client.post(
-        "/api/v1/points/award",
-        json={
-            "participant_id": str(id3),
-            "amount": 30,
-            "reason": "zone.lock_hunt.complete",
-            "idempotency_key": "board-3",
-        },
-    )
+    for participant_id, amount, idem in (
+        (id1, 90, "board-1"),
+        (id2, 60, "board-2"),
+        (id3, 30, "board-3"),
+    ):
+        response = await client.post(
+            "/api/v1/points/award",
+            json={
+                "participant_id": str(participant_id),
+                "amount": amount,
+                "reason": "zone.lock_hunt.complete",
+                "idempotency_key": idem,
+            },
+        )
+        assert response.status_code == 201
 
     auth_override(p1)
     leaderboard = await client.get("/api/v1/points/leaderboard?skip=0&limit=2")
@@ -272,7 +150,7 @@ async def test_leaderboard_and_my_rank(client, auth_override, create_user, redis
 
 @pytest.mark.asyncio
 async def test_leaderboard_me_rank_matches_ordered_leaderboard_for_ties(
-    client, auth_override, create_user, redis_override
+    client, auth_override, create_user
 ):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_6@example.com", username="adminp6")
     p1 = await create_user(email="player_points_6a@example.com", username="playerp6a")
@@ -282,26 +160,17 @@ async def test_leaderboard_me_rank_matches_ordered_leaderboard_for_ties(
     id2 = await _create_participant(client, auth_override, p2, "tied-b")
 
     auth_override(admin)
-    first_award = await client.post(
-        "/api/v1/points/award",
-        json={
-            "participant_id": str(id1),
-            "amount": 100,
-            "reason": "zone.lock_hunt.complete",
-            "idempotency_key": "tie-1",
-        },
-    )
-    second_award = await client.post(
-        "/api/v1/points/award",
-        json={
-            "participant_id": str(id2),
-            "amount": 100,
-            "reason": "zone.lock_hunt.complete",
-            "idempotency_key": "tie-2",
-        },
-    )
-    assert first_award.status_code == 201
-    assert second_award.status_code == 201
+    for participant_id, idem in ((id1, "tie-1"), (id2, "tie-2")):
+        response = await client.post(
+            "/api/v1/points/award",
+            json={
+                "participant_id": str(participant_id),
+                "amount": 100,
+                "reason": "zone.lock_hunt.complete",
+                "idempotency_key": idem,
+            },
+        )
+        assert response.status_code == 201
 
     board = await client.get("/api/v1/points/leaderboard?skip=0&limit=10")
     assert board.status_code == 200
@@ -325,7 +194,7 @@ async def test_leaderboard_me_rank_matches_ordered_leaderboard_for_ties(
 
 @pytest.mark.asyncio
 async def test_idempotency_key_conflict_for_different_payload_returns_409(
-    client, auth_override, create_user, redis_override
+    client, auth_override, create_user
 ):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_7@example.com", username="adminp7")
     p1 = await create_user(email="player_points_7a@example.com", username="playerp7a")
@@ -360,9 +229,7 @@ async def test_idempotency_key_conflict_for_different_payload_returns_409(
 
 
 @pytest.mark.asyncio
-async def test_admin_transactions_requires_admin_and_supports_filters(
-    client, auth_override, create_user, redis_override
-):
+async def test_admin_transactions_requires_admin_and_supports_filters(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_5@example.com", username="adminp5")
     player = await create_user(email="player_points_5@example.com", username="playerp5")
     participant_id = await _create_participant(client, auth_override, player, "delta")
@@ -399,9 +266,7 @@ async def test_admin_transactions_requires_admin_and_supports_filters(
 
 
 @pytest.mark.asyncio
-async def test_award_requires_non_blank_idempotency_key(
-    client, auth_override, create_user, redis_override
-):
+async def test_award_requires_non_blank_idempotency_key(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_8@example.com", username="adminp8")
     player = await create_user(email="player_points_8@example.com", username="playerp8")
     participant_id = await _create_participant(client, auth_override, player, "idem-required")
@@ -421,9 +286,7 @@ async def test_award_requires_non_blank_idempotency_key(
 
 
 @pytest.mark.asyncio
-async def test_idempotency_note_mismatch_returns_409(
-    client, auth_override, create_user, redis_override
-):
+async def test_idempotency_note_mismatch_returns_409(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_9@example.com", username="adminp9")
     player = await create_user(email="player_points_9@example.com", username="playerp9")
     participant_id = await _create_participant(client, auth_override, player, "idem-note")
@@ -455,34 +318,7 @@ async def test_idempotency_note_mismatch_returns_409(
 
 
 @pytest.mark.asyncio
-async def test_rebuild_leaderboard_cache_endpoint(client, auth_override, create_user, redis_override):
-    admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_10@example.com", username="adminp10")
-    player = await create_user(email="player_points_10@example.com", username="playerp10")
-    participant_id = await _create_participant(client, auth_override, player, "rebuild-me")
-
-    auth_override(admin)
-    award = await client.post(
-        "/api/v1/points/award",
-        json={
-            "participant_id": str(participant_id),
-            "amount": 33,
-            "reason": "zone.lock_hunt.complete",
-            "idempotency_key": "rebuild-1",
-        },
-    )
-    assert award.status_code == 201
-
-    await redis_override.delete(keys.leaderboard())
-    rebuild = await client.post("/api/v1/points/leaderboard/cache/rebuild")
-    assert rebuild.status_code == 200
-    assert rebuild.json()["total_ranked"] == 1
-    assert await redis_override.zcard(keys.leaderboard()) == 1
-
-
-@pytest.mark.asyncio
-async def test_admin_transactions_rejects_naive_datetimes(
-    client, auth_override, create_user, redis_override
-):
+async def test_admin_transactions_rejects_naive_datetimes(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_11@example.com", username="adminp11")
     auth_override(admin)
     response = await client.get("/api/v1/points/transactions?start_at=2026-04-10T10:00:00")
@@ -491,35 +327,7 @@ async def test_admin_transactions_rejects_naive_datetimes(
 
 
 @pytest.mark.asyncio
-async def test_outbox_retries_after_transient_publish_failure(
-    client, auth_override, create_user, redis_override
-):
-    admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_13@example.com", username="adminp13")
-    player = await create_user(email="player_points_13@example.com", username="playerp13")
-    participant_id = await _create_participant(client, auth_override, player, "outbox-retry")
-
-    auth_override(admin)
-    redis_override.fail_publish = True
-    first = await client.post(
-        "/api/v1/points/award",
-        json={
-            "participant_id": str(participant_id),
-            "amount": 25,
-            "reason": "zone.lock_hunt.complete",
-            "idempotency_key": "outbox-fail-1",
-        },
-    )
-    assert first.status_code == 201
-
-    redis_override.fail_publish = False
-    await asyncio.sleep(2.1)
-    drain = await client.post("/api/v1/points/outbox/drain?limit=200")
-    assert drain.status_code == 200
-    assert drain.json()["sent"] >= 1
-
-
-@pytest.mark.asyncio
-async def test_award_requires_admin_role(client, auth_override, create_user, redis_override):
+async def test_award_requires_admin_role(client, auth_override, create_user):
     player = await create_user(email="player_points_14@example.com", username="playerp14")
     participant_id = await _create_participant(client, auth_override, player, "award-admin-only")
 
@@ -537,9 +345,7 @@ async def test_award_requires_admin_role(client, auth_override, create_user, red
 
 
 @pytest.mark.asyncio
-async def test_award_validation_and_missing_participant_paths(
-    client, auth_override, create_user, redis_override
-):
+async def test_award_validation_and_missing_participant_paths(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_15@example.com", username="adminp15")
     player = await create_user(email="player_points_15@example.com", username="playerp15")
     participant_id = await _create_participant(client, auth_override, player, "validation-cases")
@@ -584,7 +390,7 @@ async def test_award_validation_and_missing_participant_paths(
 
 @pytest.mark.asyncio
 async def test_idempotency_conflict_when_same_key_used_by_different_admin_actor(
-    client, auth_override, create_user, redis_override
+    client, auth_override, create_user
 ):
     admin_a = await create_user(role_name=ROLE_ADMIN, email="admin_points_16a@example.com", username="adminp16a")
     admin_b = await create_user(role_name=ROLE_ADMIN, email="admin_points_16b@example.com", username="adminp16b")
@@ -609,7 +415,7 @@ async def test_idempotency_conflict_when_same_key_used_by_different_admin_actor(
 
 
 @pytest.mark.asyncio
-async def test_transactions_range_validation_paths(client, auth_override, create_user, redis_override):
+async def test_transactions_range_validation_paths(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_17@example.com", username="adminp17")
     auth_override(admin)
 
@@ -625,7 +431,7 @@ async def test_transactions_range_validation_paths(client, auth_override, create
 
 
 @pytest.mark.asyncio
-async def test_spend_exact_balance_to_zero_is_allowed(client, auth_override, create_user, redis_override):
+async def test_spend_exact_balance_to_zero_is_allowed(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_18@example.com", username="adminp18")
     player = await create_user(email="player_points_18@example.com", username="playerp18")
     participant_id = await _create_participant(client, auth_override, player, "exact-zero")
@@ -661,52 +467,35 @@ async def test_spend_exact_balance_to_zero_is_allowed(client, auth_override, cre
 
 
 @pytest.mark.asyncio
-async def test_outbox_drain_requires_admin_role(client, auth_override, create_user, redis_override):
-    player = await create_user(email="player_points_19@example.com", username="playerp19")
-    auth_override(player)
-    response = await client.post("/api/v1/points/outbox/drain?limit=200")
-    assert response.status_code == 403
-
-
-@pytest.mark.asyncio
-async def test_leaderboard_requires_authentication(client, create_user, redis_override):
+async def test_leaderboard_requires_authentication(client, create_user):
     response = await client.get("/api/v1/points/leaderboard")
     assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_leaderboard_ignores_stale_cache_and_uses_db_ordering(
-    client, auth_override, create_user, redis_override
-):
+async def test_leaderboard_orders_from_db_projection(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_20@example.com", username="adminp20")
     player_a = await create_user(email="player_points_20a@example.com", username="playerp20a")
     player_b = await create_user(email="player_points_20b@example.com", username="playerp20b")
-    participant_a = await _create_participant(client, auth_override, player_a, "cache-fallback-a")
-    participant_b = await _create_participant(client, auth_override, player_b, "cache-fallback-b")
+    participant_a = await _create_participant(client, auth_override, player_a, "projection-a")
+    participant_b = await _create_participant(client, auth_override, player_b, "projection-b")
 
     auth_override(admin)
-    award_a = await client.post(
-        "/api/v1/points/award",
-        json={
-            "participant_id": str(participant_a),
-            "amount": 22,
-            "reason": "zone.lock_hunt.complete",
-            "idempotency_key": "cache-fallback-award-1",
-        },
-    )
-    award_b = await client.post(
-        "/api/v1/points/award",
-        json={
-            "participant_id": str(participant_b),
-            "amount": 11,
-            "reason": "zone.lock_hunt.complete",
-            "idempotency_key": "cache-fallback-award-2",
-        },
-    )
-    assert award_a.status_code == 201
-    assert award_b.status_code == 201
+    for participant_id, amount, idem in (
+        (participant_a, 22, "projection-award-1"),
+        (participant_b, 11, "projection-award-2"),
+    ):
+        response = await client.post(
+            "/api/v1/points/award",
+            json={
+                "participant_id": str(participant_id),
+                "amount": amount,
+                "reason": "zone.lock_hunt.complete",
+                "idempotency_key": idem,
+            },
+        )
+        assert response.status_code == 201
 
-    await redis_override.zadd(keys.leaderboard(), {"stale-member": 9999.0})
     auth_override(player_a)
     board = await client.get("/api/v1/points/leaderboard?skip=0&limit=10")
     assert board.status_code == 200
@@ -722,20 +511,7 @@ async def test_leaderboard_ignores_stale_cache_and_uses_db_ordering(
 
 
 @pytest.mark.asyncio
-async def test_rebuild_leaderboard_cache_handles_empty_dataset(
-    client, auth_override, create_user, redis_override
-):
-    admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_21@example.com", username="adminp21")
-    auth_override(admin)
-    rebuild = await client.post("/api/v1/points/leaderboard/cache/rebuild")
-    assert rebuild.status_code == 200
-    assert rebuild.json()["total_ranked"] == 0
-
-
-@pytest.mark.asyncio
-async def test_leaderboard_me_compat_alias_matches_points_endpoint(
-    client, auth_override, create_user, redis_override
-):
+async def test_leaderboard_me_compat_alias_matches_points_endpoint(client, auth_override, create_user):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_22@example.com", username="adminp22")
     player = await create_user(email="player_points_22@example.com", username="playerp22")
     participant_id = await _create_participant(client, auth_override, player, "leaderboard-compat")

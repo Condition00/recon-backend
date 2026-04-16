@@ -24,8 +24,6 @@ from app.domains.points.models import (  # noqa: F401
     ParticipantPoints,
     PointLedger,
     PointLedgerBase,
-    PointsOutbox,
-    PointsOutboxBase,
 )
 from app.domains.shop.models import (  # noqa: F401
     ShopItem, ShopItemBase,

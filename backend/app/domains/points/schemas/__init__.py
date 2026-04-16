@@ -1,8 +1,6 @@
 from app.domains.points.schemas.point import (
     PointAwardCreate,
     PointAwardRead,
-    PointCacheRebuildRead,
-    PointOutboxDrainRead,
     PointLeaderboardEntry,
     PointLeaderboardMeRead,
     PointLeaderboardPageRead,
@@ -14,8 +12,6 @@ from app.domains.points.schemas.point import (
 __all__ = [
     "PointAwardCreate",
     "PointAwardRead",
-    "PointCacheRebuildRead",
-    "PointOutboxDrainRead",
     "PointLeaderboardEntry",
     "PointLeaderboardMeRead",
     "PointLeaderboardPageRead",
