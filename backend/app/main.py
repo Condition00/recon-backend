@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 
 import logfire
@@ -11,6 +12,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.v1.api import router
+from app.domains.points.service.outbox_dispatcher import run_points_outbox_daemon
 from app.utils.rbac import ensure_default_roles_and_admins
 from app.core.config import settings
 from app.db.database import AsyncSessionLocal, engine, get_db
@@ -34,6 +36,15 @@ async def lifespan(app: FastAPI):
             await ensure_default_roles_and_admins(session)
             await session.commit()
         app.state.redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        if not getattr(app.state, "disable_points_outbox_daemon", False):
+            app.state.points_outbox_stop_event = asyncio.Event()
+            app.state.points_outbox_task = asyncio.create_task(
+                run_points_outbox_daemon(
+                    session_factory=AsyncSessionLocal,
+                    redis=app.state.redis,
+                    stop_event=app.state.points_outbox_stop_event,
+                )
+            )
         logfire.info("App started with database and Redis connections.")
     except Exception as e:
         logfire.error("Failed to initialize connections", exc_info=e)
@@ -42,6 +53,10 @@ async def lifespan(app: FastAPI):
     yield
 
     try:
+        if hasattr(app.state, "points_outbox_stop_event"):
+            app.state.points_outbox_stop_event.set()
+        if hasattr(app.state, "points_outbox_task"):
+            await app.state.points_outbox_task
         if hasattr(app.state, "redis"):
             await app.state.redis.aclose()
         await engine.dispose()

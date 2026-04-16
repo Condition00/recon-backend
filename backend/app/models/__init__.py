@@ -12,3 +12,10 @@ from app.partners.models import (  # noqa: F401
     PartnerReport, PartnerReportBase,
 )
 from app.domains.participants.models import Participant, ParticipantBase  # noqa: F401
+from app.domains.points.models import (  # noqa: F401
+    ParticipantPoints,
+    PointLedger,
+    PointLedgerBase,
+    PointsOutbox,
+    PointsOutboxBase,
+)

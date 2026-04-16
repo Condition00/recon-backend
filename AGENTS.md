@@ -288,7 +288,7 @@ Audience-based top-level structure is complete and stable:
 - **`domains/announcements/`** — implemented: active feed + admin publish/edit/delete routes with expiry/pinning support
 - **`admin/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
 - **`partners/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
-- Remaining participant domain folders are scaffolded (empty `__init__.py` files only)
+- Remaining participant domain folders (`zones/`, `shop/`, `schedule/`, `teams/`, `webhooks/`) are scaffolded (empty `__init__.py` files only)
 - `app/models/__init__.py` is the Alembic aggregator — import new domain models here when added
 - `api/v1/api.py` mounts all routers (domains + admin + partners + infrastructure)
 
@@ -300,7 +300,7 @@ Audience-based top-level structure is complete and stable:
 | users | Complete | CRUD, role assignment, RBAC seeding. Roles: admin/participant/partner. No applicant role. |
 | participants | In progress | Profile creation/update, participant discovery, admin list/filter, admin check-in, talent visibility toggle. QR endpoint intentionally deferred because Luma handles ticketing; NFC persistence deferred. |
 | zones | Not started | Capacity, queue, status (red/amber/green) |
-| points | Not started | Passport economy, earn/spend, leaderboard |
+| points | Complete (hardened) | Append-only ledger table `point_ledger` with signed deltas and `resulting_balance`; projection table `participant_points` serves leaderboard/rank reads; durable `points_outbox` table added for cache/pubsub dispatch retries. Endpoints: `GET /points/me`, `GET /points/leaderboard`, `GET /points/leaderboard/me`, `POST /points/award` (admin), `GET /points/transactions` (admin), `POST /points/leaderboard/cache/rebuild` (admin, atomic temp-key swap), `POST /points/outbox/drain` (admin). A startup outbox daemon continuously drains pending `points_outbox` events using `SKIP LOCKED`; request-path post-commit drain remains opportunistic and bounded. Idempotency key is DB non-null + unique; reason codes validated with namespaced format; participant row locking (`FOR UPDATE`) remains for spend/award concurrency safety. Test coverage includes in-process router tests, Postgres-backed concurrency tests, and live-server smoke/concurrency checks; one-command test runner: `backend/scripts/test_points_all.ps1`. Migration: `f7a8c9d0e1f2` (after merge head `b3c9d7e6f2aa`). |
 | schedule | Not started | Sessions, announcements, zone map data |
 | incidents | Complete | Incident tracking layer: webhooks ingestion, ops assignment, and status lifecycle |
 | webhooks | Not started | n8n form payload ingestion |
@@ -325,13 +325,8 @@ Audience-based top-level structure is complete and stable:
 | Capability | Status | Notes |
 |---|---|---|
 | storage (R2) | Complete | Presigned upload/read URLs. `infrastructure/storage/`. Mounts at `/api/v1/r2/`. |
-<<<<<<< feature/cache-domain
 | cache (Redis) | Complete | Redis helpers (get/set, pub/sub, sorted-set, counters) + namespaced key builders. `infrastructure/cache/`. No HTTP endpoints. |
-| realtime | Not started | WebSocket chatroom — planned feature |
-=======
-| cache (Redis) | Not started | Redis pub/sub helpers, key management utilities |
 | realtime | In progress | Redis pub/sub event publisher added for announcements (`infrastructure/realtime/service/announcement_events.py`), WebSocket live stream endpoint added at `GET ws /api/v1/realtime/announcements/ws` (subscribes to Redis channel `announcements.live`), optional FCM topic push dispatch added for announcement create/update when `FCM_SERVER_KEY` is configured (`infrastructure/realtime/service/push_notifications.py`). Announcement realtime/push dispatch now runs through DB post-commit hooks (`db/post_commit.py`) to preserve commit-then-publish semantics. |
->>>>>>> main
 
 ---
 
