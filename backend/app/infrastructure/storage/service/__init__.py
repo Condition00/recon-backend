@@ -1,4 +1,4 @@
-from app.infrastructure.storage.service.r2_service import (
+from app.infrastructure.storage.service.s3_service import (
     R2Service, get_r2_service, ALLOWED_CONTENT_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE,
 )
 

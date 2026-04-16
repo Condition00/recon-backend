@@ -1,0 +1,47 @@
+# Environment variables (Crucial for security to not bake secrets into image)
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+
+# Python caching
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE / Editor configuration
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project-specific / AI folders
+AGENT/
+.gemini/
+DOCS/
+tree-maker/
+
+# Documentation & Markdown
+*.md
+!README.md
+
+# Tests
+**/tests/
+pytest.ini
+conftest.py

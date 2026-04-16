@@ -1,11 +1,6 @@
-from app.domains.points.models.participant_points import ParticipantPoints
-from app.domains.points.models.point_ledger import PointLedger, PointLedgerBase
-from app.domains.points.models.points_outbox import PointsOutbox, PointsOutboxBase
+from app.domains.points.models.point_ledger import PointLedgerEntry, PointLedgerEntryBase
 
 __all__ = [
-    "ParticipantPoints",
-    "PointLedger",
-    "PointLedgerBase",
-    "PointsOutbox",
-    "PointsOutboxBase",
+    "PointLedgerEntry",
+    "PointLedgerEntryBase",
 ]

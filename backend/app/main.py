@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlmodel.ext.asyncio.session import AsyncSession
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.api import router
 from app.domains.points.service.outbox_dispatcher import run_points_outbox_daemon
@@ -94,24 +95,24 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # ── Middleware ────────────────────────────────────────────────
 
-# SessionMiddleware — required for Authlib OAuth state storage
-app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+# SessionMiddleware - required for Authlib OAuth state storage
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SECRET_KEY,
+    session_cookie=settings.SESSION_COOKIE_NAME,
+    max_age=settings.SESSION_MAX_AGE_SECONDS,
+    same_site=settings.SESSION_SAME_SITE,
+    https_only=settings.SESSION_HTTPS_ONLY,
+)
 
-# CORS
-ALLOWED_ORIGINS = [
-    # Development
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000",
-    # Production
-    "https://traction-ai.me",
-    "https://www.traction-ai.me",
-]
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=settings.TRUSTED_HOSTS,
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -126,7 +127,7 @@ app.include_router(router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the Traction API"}
+    return {"message": "Welcome to the Recon API"}
 
 
 @app.get("/db_check")
