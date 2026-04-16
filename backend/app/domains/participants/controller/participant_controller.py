@@ -1,11 +1,13 @@
 import uuid
 
+from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.auth.models import User
 from app.domains.participants.models import Participant
 from app.domains.participants.schemas import (
     ParticipantCreate,
+    ParticipantDashboardRead,
     ParticipantRead,
     ParticipantTalentVisibilityUpdate,
     ParticipantUpdate,
@@ -13,6 +15,7 @@ from app.domains.participants.schemas import (
 from app.domains.participants.service import (
     check_in_participant,
     create_my_participant_profile,
+    get_my_dashboard,
     get_my_participant_profile,
     get_participant_for_view,
     list_participants_for_admin,
@@ -31,6 +34,12 @@ async def create_me(db: AsyncSession, user: User, payload: ParticipantCreate) ->
 async def get_me(db: AsyncSession, user: User) -> ParticipantRead:
     participant = await get_my_participant_profile(db, user=user)
     return serialize_participant_for_user(participant, user)
+
+
+async def get_dashboard(
+    db: AsyncSession, *, user: User, redis: Redis | None
+) -> ParticipantDashboardRead:
+    return await get_my_dashboard(db, user=user, redis=redis)
 
 
 async def update_me(db: AsyncSession, user: User, payload: ParticipantUpdate) -> ParticipantRead:

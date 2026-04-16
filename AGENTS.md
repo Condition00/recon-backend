@@ -288,7 +288,7 @@ Audience-based top-level structure is complete and stable:
 - **`domains/announcements/`** — implemented: active feed + admin publish/edit/delete routes with expiry/pinning support
 - **`admin/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
 - **`partners/`** — scaffolded (horizontal layers: models/, schemas/, crud/, service/, controller/, router/, tests/)
-- Remaining participant domain folders are scaffolded (empty `__init__.py` files only)
+- Remaining participant domain folders (`zones/`, `shop/`, `schedule/`, `teams/`, `webhooks/`) are scaffolded (empty `__init__.py` files only)
 - `app/models/__init__.py` is the Alembic aggregator — import new domain models here when added
 - `api/v1/api.py` mounts all routers (domains + admin + partners + infrastructure)
 
@@ -298,13 +298,13 @@ Audience-based top-level structure is complete and stable:
 |---|---|---|
 | auth | Complete | Google OAuth, JWT tokens, refresh/logout, settings-driven callback/redirect URLs, hardened session/trusted-host middleware wiring |
 | users | Complete | CRUD, role assignment, RBAC seeding. Roles: admin/participant/partner. No applicant role. |
-| participants | In progress | Profile creation/update, participant discovery, admin list/filter, admin check-in, talent visibility toggle. QR endpoint intentionally deferred because Luma handles ticketing; NFC persistence deferred. |
-| zones | Not started | Capacity, queue, status (red/amber/green) |
-| points | Partial (model only) | `point_ledger` table created (append-only ledger: participant_id, amount, reason, recorded_at). Service layer not yet built — shop domain uses stop-gap helpers for balance/spend. |
+| participants | In progress | Profile creation/update, participant discovery, admin list/filter, admin check-in, talent visibility toggle, and participant portal dashboard endpoints (`GET /me/dashboard` and compatibility `GET /participants/me/dashboard`) that aggregate points balance/rank + zone registration/check-in stats. Dashboard rank now reads from the DB-backed projection path rather than cache to preserve canonical tie ordering. QR endpoint intentionally deferred because Luma handles ticketing; NFC persistence deferred. |
+| zones | In progress (initial API) | Zones catalog + participant registration/passes: `GET /zones`, `GET /zones/{id}`, `POST /zones/{id}/register`, `DELETE /zones/{id}/register`, `GET /me/registrations`, `GET /me/passes`. Tables: `zones`, `zone_registrations` with unique `(participant_id, zone_id)` registration invariant and status check constraint (`green/amber/red/closed`). Cross-domain participant lookup and checked-in summary access now go through service helpers instead of direct foreign CRUD imports. Migrations: `a1b2c3d4e5f6`, `d4e5f6a7b8c9` (merged under current head `e6f7a8b9c0d1`). |
+| points | Complete (hardened) | Append-only ledger table `point_ledger` with signed deltas and `resulting_balance`; projection table `participant_points` serves leaderboard/rank reads; durable `points_outbox` table added for cache/pubsub dispatch retries. Endpoints: `GET /points/me`, `GET /points/leaderboard`, `GET /points/leaderboard/me`, compatibility `GET /leaderboard/me`, `POST /points/award` (admin), `GET /points/transactions` (admin), `POST /points/leaderboard/cache/rebuild` (admin, atomic temp-key swap), `POST /points/outbox/drain` (admin). A startup outbox daemon continuously drains pending `points_outbox` events using `SKIP LOCKED`; request-path post-commit drain remains opportunistic and bounded for flows that pass Redis into the points service. Idempotency key is DB non-null + unique; reason codes validated with namespaced format; participant row locking (`FOR UPDATE`) remains for spend/award concurrency safety. Leaderboard cache writes/rebuilds remain enabled, but leaderboard/rank reads currently use the DB projection path to preserve canonical tie ordering. Test coverage includes in-process router tests plus optional Postgres-backed concurrency tests (awards, spends, zone registration, and shop stock races) gated by `TEST_POSTGRES_DSN`; one-command test runner: `backend/scripts/test_points_all.ps1`. Migrations: `f7a8c9d0e1f2` with current head `e6f7a8b9c0d1`. |
 | schedule | Not started | Sessions, announcements, zone map data |
 | incidents | Complete | Incident tracking layer: webhooks ingestion, ops assignment, and status lifecycle |
 | webhooks | Not started | n8n form payload ingestion |
-| shop | Complete (initial API) | Full catalogue + redemption store. Tables: `shop_items`, `redemptions`. 8 endpoints: `GET /shop` (list active), `GET /shop/{id}` (detail), `POST /shop/{id}/redeem` (participant redeem with balance check + stock lock), `GET /shop/me/redemptions` (own history), `GET /shop/redemptions` (admin list, filterable by fulfilled), `PATCH /shop/redemptions/{id}/fulfill` (admin fulfillment), `POST /shop` (admin create), `PATCH /shop/{id}` (admin update/toggle). Concurrent stock safety via `SELECT FOR UPDATE`. Points deducted via `point_ledger` with reason `shop.redeem.<item_name>`. Mounts at `/api/v1/shop/`. |
+| shop | Complete (initial API) | Full catalogue + redemption store. Tables: `shop_items`, `redemptions`. 8 endpoints: `GET /shop` (list active), `GET /shop/{id}` (detail), `POST /shop/{id}/redeem` (participant redeem with request `idempotency_key`, balance check + stock lock), `GET /shop/me/redemptions` (own history), `GET /shop/redemptions` (admin list, filterable by fulfilled), `PATCH /shop/redemptions/{id}/fulfill` (admin fulfillment), `POST /shop` (admin create), `PATCH /shop/{id}` (admin update/toggle). Concurrent stock safety via `SELECT FOR UPDATE`. Points spending now routes through points service (idempotent ledger + projection updates + outbox) with normalized reason codes `shop.redeem.<slug>` and Redis-aware post-commit outbox draining, while redemption rows enforce their own unique request idempotency via `redemptions.idempotency_key`. Mounts at `/api/v1/shop/`. Migration: `e6f7a8b9c0d1`. |
 | teams | Not started | Team formation and management |
 | announcements | Complete (initial API) | Active feed (`GET /announcements`, `GET /announcements/{id}`), admin publish/edit/delete (`POST /announcements`, `PATCH /announcements/{id}`, `DELETE /announcements/{id}`), fields: priority/published_at/expires_at/is_pinned/created_by. Table: `announcements`. Migrations: `d1f2a3b4c5d6`, repair drift migration `1dff7bf50d72`. Realtime pub/sub events published on create/update/delete to Redis channel `announcements.live`. |
 
@@ -325,13 +325,8 @@ Audience-based top-level structure is complete and stable:
 | Capability | Status | Notes |
 |---|---|---|
 | storage (S3) | Complete | Presigned upload/read URLs with namespace-aware private/public authorization. Uses boto3 credential resolution (env/shared config/IAM role). `infrastructure/storage/`. Mounts at `/api/v1/r2/`. |
-<<<<<<< feature/cache-domain
 | cache (Redis) | Complete | Redis helpers (get/set, pub/sub, sorted-set, counters) + namespaced key builders. `infrastructure/cache/`. No HTTP endpoints. |
-| realtime | Not started | WebSocket chatroom — planned feature |
-=======
-| cache (Redis) | Not started | Redis pub/sub helpers, key management utilities |
 | realtime | In progress | Redis pub/sub event publisher added for announcements (`infrastructure/realtime/service/announcement_events.py`), WebSocket live stream endpoint added at `GET ws /api/v1/realtime/announcements/ws` (subscribes to Redis channel `announcements.live`), optional FCM topic push dispatch added for announcement create/update when `FCM_SERVER_KEY` is configured (`infrastructure/realtime/service/push_notifications.py`). Announcement realtime/push dispatch now runs through DB post-commit hooks (`db/post_commit.py`) to preserve commit-then-publish semantics. |
->>>>>>> main
 
 ---
 

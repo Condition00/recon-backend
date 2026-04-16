@@ -9,11 +9,12 @@ from app.domains.shop.models import Redemption
 
 
 async def create_redemption(
-    db: AsyncSession, *, participant_id: uuid.UUID, item_id: uuid.UUID
+    db: AsyncSession, *, participant_id: uuid.UUID, item_id: uuid.UUID, idempotency_key: str
 ) -> Redemption:
     redemption = Redemption(
         participant_id=participant_id,
         item_id=item_id,
+        idempotency_key=idempotency_key,
     )
     db.add(redemption)
     await db.flush()
@@ -23,6 +24,14 @@ async def create_redemption(
 
 async def get_redemption_by_id(db: AsyncSession, redemption_id: uuid.UUID) -> Redemption | None:
     return await db.get(Redemption, redemption_id)
+
+
+async def get_redemption_by_idempotency_key(
+    db: AsyncSession, *, idempotency_key: str
+) -> Redemption | None:
+    query = select(Redemption).where(Redemption.idempotency_key == idempotency_key)
+    result = await db.exec(query)
+    return result.one_or_none()
 
 
 async def list_redemptions_by_participant(

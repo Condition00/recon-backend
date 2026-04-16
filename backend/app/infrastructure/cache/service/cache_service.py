@@ -62,6 +62,11 @@ async def delete(redis: Redis, key: str) -> None:
     await redis.delete(key)
 
 
+async def rename(redis: Redis, source_key: str, destination_key: str) -> None:
+    """Atomically rename a key, replacing destination if it exists."""
+    await redis.rename(source_key, destination_key)
+
+
 async def delete_pattern(redis: Redis, pattern: str) -> int:
     """Delete all keys matching a glob pattern.  Returns count deleted."""
     cursor, count = b"0", 0

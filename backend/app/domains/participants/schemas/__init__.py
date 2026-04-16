@@ -1,6 +1,7 @@
 from app.domains.participants.schemas.participant import (
     ParticipantCheckInRead,
     ParticipantCreate,
+    ParticipantDashboardRead,
     ParticipantRead,
     ParticipantTalentVisibilityUpdate,
     ParticipantUpdate,
@@ -9,6 +10,7 @@ from app.domains.participants.schemas.participant import (
 __all__ = [
     "ParticipantCheckInRead",
     "ParticipantCreate",
+    "ParticipantDashboardRead",
     "ParticipantRead",
     "ParticipantTalentVisibilityUpdate",
     "ParticipantUpdate",
