@@ -10,6 +10,7 @@ from sqlmodel import SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 import app.models  # noqa: F401
+from app.core.security import create_access_token
 from app.db.database import get_db
 from app.db.post_commit import pop_post_commit_hooks
 from app.domains.auth.models import ROLE_ADMIN, ROLE_PARTICIPANT, ROLE_PARTNER, Role, User
@@ -66,6 +67,15 @@ class FakeRedis:
             self.sorted_sets[destination_key] = self.sorted_sets.pop(source_key)
             return True
         raise KeyError(source_key)
+
+
+def _redeem_payload(key: str) -> dict[str, str]:
+    return {"idempotency_key": key}
+
+
+def _set_auth_cookie(client: AsyncClient, user: User, role_name: str) -> None:
+    token = create_access_token(user.id, role_name)
+    client.cookies.set("access_token", token)
 
 
 @pytest_asyncio.fixture
@@ -328,3 +338,166 @@ async def test_postgres_concurrent_spend_only_one_succeeds_when_insufficient(
     me = await pg_client.get("/api/v1/points/me")
     assert me.status_code == 200
     assert me.json()["balance"] == 10
+
+
+@pytest.mark.asyncio
+async def test_postgres_concurrent_zone_registration_creates_single_active_row(
+    pg_client, pg_create_user, pg_session_factory
+):
+    player = await pg_create_user(email="pg-zone-player@example.com", username="pgzoneplayer")
+
+    _set_auth_cookie(pg_client, player, ROLE_PARTICIPANT)
+    create = await pg_client.post(
+        "/api/v1/participants/me",
+        json={"display_name": "pg-zone", "institution": "VIT-AP", "year": 2},
+    )
+    assert create.status_code == 201
+
+    async with pg_session_factory() as session:
+        from app.domains.zones.models import Zone
+
+        created_zone = Zone(
+            name="PG Zone",
+            short_name="PGZONE",
+            category="challenge",
+            zone_type="booth",
+            status="green",
+            location="Hall PG",
+            points=10,
+            color="#22C55E",
+            tags=["pg"],
+            is_active=True,
+        )
+        session.add(created_zone)
+        await session.commit()
+        await session.refresh(created_zone)
+        zone_id = created_zone.id
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport, base_url="http://testserver", follow_redirects=True
+    ) as client_a, AsyncClient(
+        transport=transport, base_url="http://testserver", follow_redirects=True
+    ) as client_b:
+        _set_auth_cookie(client_a, player, ROLE_PARTICIPANT)
+        _set_auth_cookie(client_b, player, ROLE_PARTICIPANT)
+        r1, r2 = await asyncio.gather(
+            client_a.post(f"/api/v1/zones/{zone_id}/register"),
+            client_b.post(f"/api/v1/zones/{zone_id}/register"),
+        )
+    assert set([r1.status_code, r2.status_code]).issubset({200, 201})
+
+    async with pg_session_factory() as session:
+        from app.domains.zones.models import ZoneRegistration
+
+        rows = await session.exec(
+            select(ZoneRegistration).where(
+                ZoneRegistration.zone_id == zone_id,
+                ZoneRegistration.is_active.is_(True),
+            )
+        )
+        assert len(list(rows.all())) == 1
+
+
+@pytest.mark.asyncio
+async def test_postgres_concurrent_single_stock_redeem_only_one_succeeds(
+    pg_client, pg_create_user, pg_session_factory
+):
+    admin = await pg_create_user(email="pg-shop-admin@example.com", username="pgshopadmin", role_name=ROLE_ADMIN)
+    player_a = await pg_create_user(email="pg-shop-a@example.com", username="pgshopa")
+    player_b = await pg_create_user(email="pg-shop-b@example.com", username="pgshopb")
+
+    for user, display_name in ((player_a, "pg-shop-a"), (player_b, "pg-shop-b")):
+        _set_auth_cookie(pg_client, user, ROLE_PARTICIPANT)
+        response = await pg_client.post(
+            "/api/v1/participants/me",
+            json={"display_name": display_name, "institution": "VIT-AP", "year": 2},
+        )
+        assert response.status_code == 201
+        participant_id = response.json()["id"]
+
+        _set_auth_cookie(pg_client, admin, ROLE_ADMIN)
+        seed = await pg_client.post(
+            "/api/v1/points/award",
+            json={
+                "participant_id": participant_id,
+                "amount": 100,
+                "reason": "zone.lock_hunt.complete",
+                "idempotency_key": str(uuid.uuid4()),
+            },
+        )
+        assert seed.status_code == 201
+
+    _set_auth_cookie(pg_client, admin, ROLE_ADMIN)
+    create_item = await pg_client.post(
+        "/api/v1/shop/",
+        json={"name": "PG Single Stock", "description": "one only", "point_cost": 60, "stock": 1},
+    )
+    assert create_item.status_code == 201
+    item_id = create_item.json()["id"]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport, base_url="http://testserver", follow_redirects=True
+    ) as client_a, AsyncClient(
+        transport=transport, base_url="http://testserver", follow_redirects=True
+    ) as client_b:
+        _set_auth_cookie(client_a, player_a, ROLE_PARTICIPANT)
+        _set_auth_cookie(client_b, player_b, ROLE_PARTICIPANT)
+        r1, r2 = await asyncio.gather(
+            client_a.post(f"/api/v1/shop/{item_id}/redeem", json=_redeem_payload("pg-stock-redeem-1")),
+            client_b.post(f"/api/v1/shop/{item_id}/redeem", json=_redeem_payload("pg-stock-redeem-2")),
+        )
+    assert sorted([r1.status_code, r2.status_code]) == [200, 409]
+
+
+@pytest.mark.asyncio
+async def test_postgres_concurrent_same_redeem_idempotency_returns_same_redemption(
+    pg_client, pg_create_user
+):
+    admin = await pg_create_user(email="pg-shop-idem-admin@example.com", username="pgshopidemadmin", role_name=ROLE_ADMIN)
+    player = await pg_create_user(email="pg-shop-idem@example.com", username="pgshopidem")
+
+    _set_auth_cookie(pg_client, player, ROLE_PARTICIPANT)
+    profile = await pg_client.post(
+        "/api/v1/participants/me",
+        json={"display_name": "pg-shop-idem", "institution": "VIT-AP", "year": 2},
+    )
+    assert profile.status_code == 201
+    participant_id = profile.json()["id"]
+
+    _set_auth_cookie(pg_client, admin, ROLE_ADMIN)
+    seed = await pg_client.post(
+        "/api/v1/points/award",
+        json={
+            "participant_id": participant_id,
+            "amount": 120,
+            "reason": "zone.lock_hunt.complete",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert seed.status_code == 201
+
+    create_item = await pg_client.post(
+        "/api/v1/shop/",
+        json={"name": "PG Idem Stock", "description": "same-key", "point_cost": 60, "stock": 5},
+    )
+    assert create_item.status_code == 201
+    item_id = create_item.json()["id"]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport, base_url="http://testserver", follow_redirects=True
+    ) as client_a, AsyncClient(
+        transport=transport, base_url="http://testserver", follow_redirects=True
+    ) as client_b:
+        _set_auth_cookie(client_a, player, ROLE_PARTICIPANT)
+        _set_auth_cookie(client_b, player, ROLE_PARTICIPANT)
+        r1, r2 = await asyncio.gather(
+            client_a.post(f"/api/v1/shop/{item_id}/redeem", json=_redeem_payload("pg-same-redeem-1")),
+            client_b.post(f"/api/v1/shop/{item_id}/redeem", json=_redeem_payload("pg-same-redeem-1")),
+        )
+
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r1.json()["id"] == r2.json()["id"]

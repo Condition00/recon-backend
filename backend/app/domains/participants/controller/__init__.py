@@ -1,6 +1,7 @@
 from app.domains.participants.controller.participant_controller import (
     check_in,
     create_me,
+    get_dashboard,
     get_me,
     get_one,
     list_all,
@@ -11,6 +12,7 @@ from app.domains.participants.controller.participant_controller import (
 __all__ = [
     "check_in",
     "create_me",
+    "get_dashboard",
     "get_me",
     "get_one",
     "list_all",

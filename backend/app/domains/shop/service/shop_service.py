@@ -1,13 +1,17 @@
+import hashlib
 import uuid
-import warnings
 from typing import Optional
 
 from fastapi import HTTPException
-from sqlalchemy import func
-from sqlalchemy import select as sa_select
+from redis.asyncio import Redis
+from sqlalchemy.exc import IntegrityError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.domains.auth.models import User
+from app.domains.points import crud as points_crud
 from app.domains.points.models import PointLedgerEntry
+from app.domains.points.schemas import PointAwardCreate
+from app.domains.points.service import award_points
 from app.domains.shop.crud import (
     count_redemptions_for_item,
     create_item,
@@ -16,6 +20,7 @@ from app.domains.shop.crud import (
     get_item_by_id,
     get_item_for_update,
     get_redemption_by_id,
+    get_redemption_by_idempotency_key,
     list_active_items,
     list_all_redemptions as crud_list_all_redemptions,
     list_redemptions_by_participant,
@@ -24,6 +29,7 @@ from app.domains.shop.crud import (
 from app.domains.shop.models import Redemption, ShopItem
 from app.domains.shop.schemas import (
     RedemptionFulfill,
+    RedemptionRedeem,
     RedemptionRead,
     ShopItemCreate,
     ShopItemRead,
@@ -89,13 +95,30 @@ async def update_shop_item(
 # ---------------------------------------------------------------------------
 
 async def redeem_item(
-    db: AsyncSession, *, item_id: uuid.UUID, participant_id: uuid.UUID
+    db: AsyncSession,
+    *,
+    item_id: uuid.UUID,
+    participant_id: uuid.UUID,
+    actor: User,
+    payload: RedemptionRedeem,
+    redis: Redis | None,
 ) -> RedemptionRead:
     """
     Atomic redeem: row-lock item → check active → check stock → check balance → deduct → create redemption.
 
     Everything runs inside the caller's transaction so commit/rollback is automatic.
     """
+    existing = await get_redemption_by_idempotency_key(
+        db, idempotency_key=payload.idempotency_key
+    )
+    if existing is not None:
+        if existing.participant_id != participant_id or existing.item_id != item_id:
+            raise HTTPException(
+                status_code=409,
+                detail="idempotency_key already exists for a different redemption request",
+            )
+        return await _enrich_redemption(db, existing)
+
     # 1. Lock the item row
     item = await get_item_for_update(db, item_id)
     if not item:
@@ -122,11 +145,39 @@ async def redeem_item(
         db,
         participant_id=participant_id,
         amount=item.point_cost,
-        reason=f"shop.redeem.{item.name}",
+        reason=_build_shop_redeem_reason(item.name),
+        reference_id=item.id,
+        actor=actor,
+        idempotency_key=_build_redeem_points_idempotency_key(
+            participant_id=participant_id,
+            item_id=item.id,
+            request_idempotency_key=payload.idempotency_key,
+        ),
+        note=f"shop redemption for {item.name}",
+        redis=redis,
     )
 
     # 5. Create redemption record
-    redemption = await create_redemption(db, participant_id=participant_id, item_id=item.id)
+    try:
+        async with db.begin_nested():
+            redemption = await create_redemption(
+                db,
+                participant_id=participant_id,
+                item_id=item.id,
+                idempotency_key=payload.idempotency_key,
+            )
+    except IntegrityError:
+        existing = await get_redemption_by_idempotency_key(
+            db, idempotency_key=payload.idempotency_key
+        )
+        if existing is None:
+            raise
+        if existing.participant_id != participant_id or existing.item_id != item.id:
+            raise HTTPException(
+                status_code=409,
+                detail="idempotency_key already exists for a different redemption request",
+            )
+        return await _enrich_redemption(db, existing)
 
     return _redemption_to_read(redemption, item)
 
@@ -166,29 +217,52 @@ async def fulfill_redemption_admin(
 # ---------------------------------------------------------------------------
 
 async def _get_participant_balance(db: AsyncSession, participant_id: uuid.UUID) -> int:
-    """Sum all ledger entries for a participant."""
-    query = (
-        sa_select(func.coalesce(func.sum(PointLedgerEntry.amount), 0))
-        .where(PointLedgerEntry.participant_id == participant_id)
-    )
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        result = await db.execute(query)
-    return int(result.scalar_one())
+    """Read participant balance from points projection."""
+    return await points_crud.get_balance_for_participant(db, participant_id=participant_id)
 
 
 async def _spend_points(
-    db: AsyncSession, *, participant_id: uuid.UUID, amount: int, reason: str
+    db: AsyncSession,
+    *,
+    participant_id: uuid.UUID,
+    amount: int,
+    reason: str,
+    reference_id: uuid.UUID | None,
+    actor: User,
+    idempotency_key: str,
+    note: str | None = None,
+    redis: Redis | None,
 ) -> PointLedgerEntry:
-    """Insert a negative ledger entry. Follows the convention from AGENTS.md."""
-    entry = PointLedgerEntry(
+    """Spend points through the points domain service to preserve invariants."""
+    payload = PointAwardCreate(
         participant_id=participant_id,
         amount=-amount,
         reason=reason,
+        reference_id=reference_id,
+        idempotency_key=idempotency_key,
+        note=note,
     )
-    db.add(entry)
-    await db.flush()
+    entry, _ = await award_points(db, payload=payload, actor=actor, redis=redis)
     return entry
+
+
+def _build_shop_redeem_reason(item_name: str) -> str:
+    normalized = "".join(ch.lower() if ch.isalnum() else "_" for ch in item_name).strip("_")
+    if not normalized:
+        normalized = "item"
+    while "__" in normalized:
+        normalized = normalized.replace("__", "_")
+    if not normalized[0].isalpha():
+        normalized = f"item_{normalized}"
+    return f"shop.redeem.{normalized}"
+
+
+def _build_redeem_points_idempotency_key(
+    *, participant_id: uuid.UUID, item_id: uuid.UUID, request_idempotency_key: str
+) -> str:
+    raw = f"{participant_id}:{item_id}:{request_idempotency_key}".encode("utf-8")
+    digest = hashlib.sha256(raw).hexdigest()
+    return f"shop.redeem.{digest[:87]}"
 
 
 # ---------------------------------------------------------------------------

@@ -3,6 +3,34 @@ import uuid
 import pytest
 
 from app.domains.auth.models import ROLE_ADMIN
+from app.domains.points.schemas import PointAwardCreate
+from app.domains.points.service import award_points
+
+
+async def _seed_points(session_factory, *, actor, participant_id: uuid.UUID, amount: int) -> None:
+    async with session_factory() as session:
+        payload = PointAwardCreate(
+            participant_id=participant_id,
+            amount=amount,
+            reason="test.seed",
+            idempotency_key=f"test.seed.{uuid.uuid4().hex}",
+        )
+        await award_points(session, payload=payload, actor=actor, redis=None)
+        await session.commit()
+
+
+def _redeem_payload(key: str) -> dict[str, str]:
+    return {"idempotency_key": key}
+
+
+async def _create_participant(client, auth_override, user, display_name: str) -> uuid.UUID:
+    auth_override(user)
+    response = await client.post(
+        "/api/v1/participants/me",
+        json={"display_name": display_name, "institution": "VIT-AP", "year": 2},
+    )
+    assert response.status_code == 201
+    return uuid.UUID(response.json()["id"])
 
 
 @pytest.mark.asyncio
@@ -123,7 +151,10 @@ async def test_redeem_insufficient_balance_returns_400(client, auth_override, cr
 
     # Participant tries to redeem (0 balance)
     auth_override(participant_user)
-    redeem_resp = await client.post(f"/api/v1/shop/{item_id}/redeem")
+    redeem_resp = await client.post(
+        f"/api/v1/shop/{item_id}/redeem",
+        json=_redeem_payload("redeem-insufficient-1"),
+    )
 
     assert redeem_resp.status_code == 400
     assert "Insufficient points" in redeem_resp.json()["detail"]
@@ -132,9 +163,6 @@ async def test_redeem_insufficient_balance_returns_400(client, auth_override, cr
 @pytest.mark.asyncio
 async def test_redeem_with_balance_succeeds(client, auth_override, create_user, session_factory):
     """Redeeming with sufficient points succeeds and deducts balance."""
-    from app.domains.points.models import PointLedgerEntry
-    from app.domains.participants.models import Participant
-
     admin = await create_user(role_name=ROLE_ADMIN, email="shopadmin6@example.com", username="shopadmin6")
     participant_user = await create_user(email="rich@example.com", username="rich")
 
@@ -147,14 +175,12 @@ async def test_redeem_with_balance_succeeds(client, auth_override, create_user, 
     participant_id = uuid.UUID(profile_resp.json()["id"])
 
     # Seed points for participant
-    async with session_factory() as session:
-        entry = PointLedgerEntry(
-            participant_id=participant_id,
-            amount=1000,
-            reason="test.seed",
-        )
-        session.add(entry)
-        await session.commit()
+    await _seed_points(
+        session_factory,
+        actor=admin,
+        participant_id=participant_id,
+        amount=1000,
+    )
 
     # Admin creates a shop item
     auth_override(admin)
@@ -166,7 +192,10 @@ async def test_redeem_with_balance_succeeds(client, auth_override, create_user, 
 
     # Participant redeems
     auth_override(participant_user)
-    redeem_resp = await client.post(f"/api/v1/shop/{item_id}/redeem")
+    redeem_resp = await client.post(
+        f"/api/v1/shop/{item_id}/redeem",
+        json=_redeem_payload("redeem-success-1"),
+    )
 
     assert redeem_resp.status_code == 200
     data = redeem_resp.json()
@@ -188,8 +217,6 @@ async def test_redeem_with_balance_succeeds(client, auth_override, create_user, 
 @pytest.mark.asyncio
 async def test_admin_fulfills_redemption(client, auth_override, create_user, session_factory):
     """Admin can mark a redemption as fulfilled."""
-    from app.domains.points.models import PointLedgerEntry
-
     admin = await create_user(role_name=ROLE_ADMIN, email="shopadmin7@example.com", username="shopadmin7")
     participant_user = await create_user(email="merch@example.com", username="merch")
 
@@ -200,9 +227,12 @@ async def test_admin_fulfills_redemption(client, auth_override, create_user, ses
     )
     participant_id = uuid.UUID(profile_resp.json()["id"])
 
-    async with session_factory() as session:
-        session.add(PointLedgerEntry(participant_id=participant_id, amount=500, reason="test.seed"))
-        await session.commit()
+    await _seed_points(
+        session_factory,
+        actor=admin,
+        participant_id=participant_id,
+        amount=500,
+    )
 
     auth_override(admin)
     create_resp = await client.post(
@@ -212,7 +242,10 @@ async def test_admin_fulfills_redemption(client, auth_override, create_user, ses
     item_id = create_resp.json()["id"]
 
     auth_override(participant_user)
-    redeem_resp = await client.post(f"/api/v1/shop/{item_id}/redeem")
+    redeem_resp = await client.post(
+        f"/api/v1/shop/{item_id}/redeem",
+        json=_redeem_payload("redeem-fulfill-1"),
+    )
     redemption_id = redeem_resp.json()["id"]
 
     # Admin fulfills
@@ -230,8 +263,6 @@ async def test_admin_fulfills_redemption(client, auth_override, create_user, ses
 @pytest.mark.asyncio
 async def test_admin_lists_redemptions_with_filter(client, auth_override, create_user, session_factory):
     """Admin can list all redemptions and filter by fulfilled state."""
-    from app.domains.points.models import PointLedgerEntry
-
     admin = await create_user(role_name=ROLE_ADMIN, email="shopadmin8@example.com", username="shopadmin8")
     participant_user = await create_user(email="redeemer@example.com", username="redeemer")
 
@@ -242,17 +273,26 @@ async def test_admin_lists_redemptions_with_filter(client, auth_override, create
     )
     participant_id = uuid.UUID(profile_resp.json()["id"])
 
-    async with session_factory() as session:
-        session.add(PointLedgerEntry(participant_id=participant_id, amount=2000, reason="test.seed"))
-        await session.commit()
+    await _seed_points(
+        session_factory,
+        actor=admin,
+        participant_id=participant_id,
+        amount=2000,
+    )
 
     auth_override(admin)
     item1 = await client.post("/api/v1/shop/", json={"name": "Pin", "description": "Enamel pin", "point_cost": 20, "stock": 100})
     item2 = await client.post("/api/v1/shop/", json={"name": "Pen", "description": "Ballpoint pen", "point_cost": 10, "stock": 200})
 
     auth_override(participant_user)
-    r1 = await client.post(f"/api/v1/shop/{item1.json()['id']}/redeem")
-    r2 = await client.post(f"/api/v1/shop/{item2.json()['id']}/redeem")
+    r1 = await client.post(
+        f"/api/v1/shop/{item1.json()['id']}/redeem",
+        json=_redeem_payload("redeem-list-1"),
+    )
+    r2 = await client.post(
+        f"/api/v1/shop/{item2.json()['id']}/redeem",
+        json=_redeem_payload("redeem-list-2"),
+    )
 
     # Fulfill one
     auth_override(admin)
@@ -272,3 +312,135 @@ async def test_admin_lists_redemptions_with_filter(client, auth_override, create
     fulfilled_resp = await client.get("/api/v1/shop/redemptions?fulfilled=true")
     assert len(fulfilled_resp.json()) == 1
     assert fulfilled_resp.json()[0]["item_name"] == "Pin"
+
+
+@pytest.mark.asyncio
+async def test_redeem_idempotency_returns_same_redemption_without_double_spend(
+    client, auth_override, create_user, session_factory
+):
+    admin = await create_user(role_name=ROLE_ADMIN, email="shopadmin9@example.com", username="shopadmin9")
+    participant_user = await create_user(email="idemshop@example.com", username="idemshop")
+
+    auth_override(participant_user)
+    profile_resp = await client.post(
+        "/api/v1/participants/me",
+        json={"display_name": "idem-shopper", "institution": "VIT-AP", "year": 3},
+    )
+    participant_id = uuid.UUID(profile_resp.json()["id"])
+
+    await _seed_points(session_factory, actor=admin, participant_id=participant_id, amount=400)
+
+    auth_override(admin)
+    create_resp = await client.post(
+        "/api/v1/shop/",
+        json={"name": "Patch", "description": "Velcro patch", "point_cost": 150, "stock": 5},
+    )
+    item_id = create_resp.json()["id"]
+
+    auth_override(participant_user)
+    first = await client.post(
+        f"/api/v1/shop/{item_id}/redeem",
+        json=_redeem_payload("redeem-idem-1"),
+    )
+    second = await client.post(
+        f"/api/v1/shop/{item_id}/redeem",
+        json=_redeem_payload("redeem-idem-1"),
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["id"] == second.json()["id"]
+
+    points_me = await client.get("/api/v1/points/me")
+    assert points_me.status_code == 200
+    assert points_me.json()["balance"] == 250
+
+    redemptions = await client.get("/api/v1/shop/me/redemptions")
+    assert redemptions.status_code == 200
+    assert len(redemptions.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_redeem_rejects_blank_idempotency_key(
+    client, auth_override, create_user, session_factory
+):
+    admin = await create_user(role_name=ROLE_ADMIN, email="shopadmin11@example.com", username="shopadmin11")
+    participant_user = await create_user(email="blankidem@example.com", username="blankidem")
+
+    auth_override(participant_user)
+    profile_resp = await client.post(
+        "/api/v1/participants/me",
+        json={"display_name": "blank-idem", "institution": "VIT-AP", "year": 2},
+    )
+    participant_id = uuid.UUID(profile_resp.json()["id"])
+    await _seed_points(session_factory, actor=admin, participant_id=participant_id, amount=200)
+
+    auth_override(admin)
+    create_resp = await client.post(
+        "/api/v1/shop/",
+        json={"name": "Blank Key Item", "description": "test", "point_cost": 50, "stock": 5},
+    )
+    item_id = create_resp.json()["id"]
+
+    auth_override(participant_user)
+    redeem = await client.post(
+        f"/api/v1/shop/{item_id}/redeem",
+        json=_redeem_payload("   "),
+    )
+    assert redeem.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_redeem_immediately_keeps_points_rank_and_dashboard_consistent(
+    client, auth_override, create_user, session_factory
+):
+    admin = await create_user(role_name=ROLE_ADMIN, email="shopadmin10@example.com", username="shopadmin10")
+    buyer = await create_user(email="buyer-fast@example.com", username="buyerfast")
+    rival = await create_user(email="rival-fast@example.com", username="rivalfast")
+
+    buyer_participant_id = await _create_participant(client, auth_override, buyer, "buyer-fast")
+    rival_participant_id = await _create_participant(client, auth_override, rival, "rival-fast")
+
+    auth_override(admin)
+    for participant_id, amount, idem in (
+        (buyer_participant_id, 200, "redeem-consistency-seed-1"),
+        (rival_participant_id, 180, "redeem-consistency-seed-2"),
+    ):
+        response = await client.post(
+            "/api/v1/points/award",
+            json={
+                "participant_id": str(participant_id),
+                "amount": amount,
+                "reason": "zone.lock_hunt.complete",
+                "idempotency_key": idem,
+            },
+        )
+        assert response.status_code == 201
+
+    rebuild = await client.post("/api/v1/points/leaderboard/cache/rebuild")
+    assert rebuild.status_code == 200
+
+    create_item = await client.post(
+        "/api/v1/shop/",
+        json={"name": "Fast Badge", "description": "Instant redeem", "point_cost": 50, "stock": 10},
+    )
+    item_id = create_item.json()["id"]
+
+    auth_override(buyer)
+    redeem_resp = await client.post(
+        f"/api/v1/shop/{item_id}/redeem",
+        json=_redeem_payload("redeem-consistency-1"),
+    )
+    assert redeem_resp.status_code == 200
+
+    points_me = await client.get("/api/v1/points/me")
+    rank_me = await client.get("/api/v1/points/leaderboard/me")
+    dashboard = await client.get("/api/v1/me/dashboard")
+
+    assert points_me.status_code == 200
+    assert rank_me.status_code == 200
+    assert dashboard.status_code == 200
+    assert points_me.json()["balance"] == 150
+    assert rank_me.json()["points"] == 150
+    assert dashboard.json()["pointsBalance"] == 150
+    assert dashboard.json()["leaderboardRank"] == rank_me.json()["rank"]

@@ -675,30 +675,50 @@ async def test_leaderboard_requires_authentication(client, create_user, redis_ov
 
 
 @pytest.mark.asyncio
-async def test_leaderboard_falls_back_to_db_when_cache_errors(
+async def test_leaderboard_ignores_stale_cache_and_uses_db_ordering(
     client, auth_override, create_user, redis_override
 ):
     admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_20@example.com", username="adminp20")
-    player = await create_user(email="player_points_20@example.com", username="playerp20")
-    participant_id = await _create_participant(client, auth_override, player, "cache-fallback")
+    player_a = await create_user(email="player_points_20a@example.com", username="playerp20a")
+    player_b = await create_user(email="player_points_20b@example.com", username="playerp20b")
+    participant_a = await _create_participant(client, auth_override, player_a, "cache-fallback-a")
+    participant_b = await _create_participant(client, auth_override, player_b, "cache-fallback-b")
 
     auth_override(admin)
-    award = await client.post(
+    award_a = await client.post(
         "/api/v1/points/award",
         json={
-            "participant_id": str(participant_id),
+            "participant_id": str(participant_a),
             "amount": 22,
             "reason": "zone.lock_hunt.complete",
             "idempotency_key": "cache-fallback-award-1",
         },
     )
-    assert award.status_code == 201
+    award_b = await client.post(
+        "/api/v1/points/award",
+        json={
+            "participant_id": str(participant_b),
+            "amount": 11,
+            "reason": "zone.lock_hunt.complete",
+            "idempotency_key": "cache-fallback-award-2",
+        },
+    )
+    assert award_a.status_code == 201
+    assert award_b.status_code == 201
 
-    redis_override.fail_zcard = True
-    auth_override(player)
+    await redis_override.zadd(keys.leaderboard(), {"stale-member": 9999.0})
+    auth_override(player_a)
     board = await client.get("/api/v1/points/leaderboard?skip=0&limit=10")
     assert board.status_code == 200
-    assert any(entry["participant_id"] == str(participant_id) for entry in board.json()["entries"])
+    entries = board.json()["entries"]
+    assert [entry["participant_id"] for entry in entries] == [
+        str(participant_a),
+        str(participant_b),
+    ]
+
+    my_rank = await client.get("/api/v1/points/leaderboard/me")
+    assert my_rank.status_code == 200
+    assert my_rank.json()["rank"] == 1
 
 
 @pytest.mark.asyncio
@@ -710,3 +730,31 @@ async def test_rebuild_leaderboard_cache_handles_empty_dataset(
     rebuild = await client.post("/api/v1/points/leaderboard/cache/rebuild")
     assert rebuild.status_code == 200
     assert rebuild.json()["total_ranked"] == 0
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_me_compat_alias_matches_points_endpoint(
+    client, auth_override, create_user, redis_override
+):
+    admin = await create_user(role_name=ROLE_ADMIN, email="admin_points_22@example.com", username="adminp22")
+    player = await create_user(email="player_points_22@example.com", username="playerp22")
+    participant_id = await _create_participant(client, auth_override, player, "leaderboard-compat")
+
+    auth_override(admin)
+    award = await client.post(
+        "/api/v1/points/award",
+        json={
+            "participant_id": str(participant_id),
+            "amount": 77,
+            "reason": "zone.lock_hunt.complete",
+            "idempotency_key": "leaderboard-compat-award-1",
+        },
+    )
+    assert award.status_code == 201
+
+    auth_override(player)
+    canonical = await client.get("/api/v1/points/leaderboard/me")
+    compat = await client.get("/api/v1/leaderboard/me")
+    assert canonical.status_code == 200
+    assert compat.status_code == 200
+    assert compat.json() == canonical.json()

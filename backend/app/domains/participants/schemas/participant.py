@@ -57,3 +57,13 @@ class ParticipantCheckInRead(SQLModel):
     id: uuid.UUID
     checked_in_at: datetime.datetime
     checked_in_by: uuid.UUID
+
+
+class ParticipantDashboardRead(SQLModel):
+    displayName: str
+    registrationId: uuid.UUID
+    pointsBalance: int
+    zonesCheckedInCount: int
+    checkedInZoneIds: list[uuid.UUID]
+    eventsRegisteredCount: int
+    leaderboardRank: int | None = None

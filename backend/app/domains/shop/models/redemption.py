@@ -10,6 +10,7 @@ from app.utils.models.base import Base
 
 class RedemptionBase(SQLModel):
     fulfillment_notes: Optional[str] = Field(default=None, max_length=500)
+    idempotency_key: str = Field(max_length=120, unique=True, index=True)
 
 
 class Redemption(Base, RedemptionBase, table=True):
