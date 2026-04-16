@@ -1,4 +1,5 @@
 from app.domains.zones.crud.zone import (
+    count_active_zone_registrations_for_participant,
     count_checked_in_zones_for_participant,
     create_registration,
     get_registration,
@@ -13,6 +14,7 @@ from app.domains.zones.crud.zone import (
 )
 
 __all__ = [
+    "count_active_zone_registrations_for_participant",
     "count_checked_in_zones_for_participant",
     "create_registration",
     "get_registration",

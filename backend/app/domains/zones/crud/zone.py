@@ -164,6 +164,20 @@ async def count_checked_in_zones_for_participant(
     return int(result.one())
 
 
+async def count_active_zone_registrations_for_participant(
+    db: AsyncSession,
+    *,
+    participant_id: uuid.UUID,
+) -> int:
+    stmt = (
+        select(func.count(col(ZoneRegistration.id)))
+        .where(ZoneRegistration.participant_id == participant_id)
+        .where(ZoneRegistration.is_active.is_(True))
+    )
+    result = await db.exec(stmt)
+    return int(result.one())
+
+
 async def list_checked_in_zone_ids_for_participant(
     db: AsyncSession,
     *,

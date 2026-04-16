@@ -22,7 +22,10 @@ from app.domains.participants.schemas import (
     ParticipantUpdate,
 )
 from app.domains.points.service import get_my_points_summary, get_my_rank
-from app.domains.zones.service.zone_summary_service import get_checked_in_zone_summary
+from app.domains.zones.service.zone_summary_service import (
+    get_active_registration_count,
+    get_checked_in_zone_summary,
+)
 
 
 async def create_my_participant_profile(
@@ -125,6 +128,9 @@ async def get_my_dashboard(
     checked_in_count, checked_in_zone_ids = await get_checked_in_zone_summary(
         db, participant_id=participant.id
     )
+    active_registration_count = await get_active_registration_count(
+        db, participant_id=participant.id
+    )
 
     return ParticipantDashboardRead(
         displayName=participant.display_name,
@@ -132,7 +138,7 @@ async def get_my_dashboard(
         pointsBalance=points.balance,
         zonesCheckedInCount=checked_in_count,
         checkedInZoneIds=checked_in_zone_ids,
-        eventsRegisteredCount=0,
+        eventsRegisteredCount=active_registration_count,
         leaderboardRank=rank.rank,
     )
 

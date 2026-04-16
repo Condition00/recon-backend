@@ -210,7 +210,7 @@ async def test_participant_dashboard_aggregates_points_and_zone_checkins(
     assert body["pointsBalance"] == 100
     assert body["zonesCheckedInCount"] == 1
     assert len(body["checkedInZoneIds"]) == 1
-    assert body["eventsRegisteredCount"] == 0
+    assert body["eventsRegisteredCount"] == 1
     assert body["leaderboardRank"] == 2
 
 

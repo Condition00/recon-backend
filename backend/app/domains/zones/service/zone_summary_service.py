@@ -15,3 +15,11 @@ async def get_checked_in_zone_summary(
         db, participant_id=participant_id
     )
     return checked_in_count, checked_in_zone_ids
+
+
+async def get_active_registration_count(
+    db: AsyncSession, *, participant_id: uuid.UUID
+) -> int:
+    return await crud.count_active_zone_registrations_for_participant(
+        db, participant_id=participant_id
+    )
