@@ -1,4 +1,4 @@
-from app.infrastructure.storage.schemas.r2_schemas import (
+from app.infrastructure.storage.schemas.s3_schemas import (
     PresignedReadResponse,
     PresignedUploadResponse,
     StorageObjectScope,

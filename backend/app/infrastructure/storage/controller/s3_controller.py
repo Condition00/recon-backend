@@ -6,12 +6,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.auth.models import ROLE_ADMIN, ROLE_PARTNER, User
 from app.domains.participants.crud import get_participant_by_user_id
-from app.infrastructure.storage.schemas.r2_schemas import (
+from app.infrastructure.storage.schemas.s3_schemas import (
     PresignedReadResponse,
     PresignedUploadResponse,
     StorageObjectScope,
 )
-from app.infrastructure.storage.service.r2_service import (
+from app.infrastructure.storage.service.s3_service import (
     ALLOWED_CONTENT_TYPES, ALLOWED_EXTENSIONS, get_r2_service,
 )
 from app.partners.crud import get_partner_by_id, get_partner_by_user_id

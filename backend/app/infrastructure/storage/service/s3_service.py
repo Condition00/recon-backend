@@ -24,19 +24,25 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 class R2Service:
     def __init__(self) -> None:
-        self.s3_client = boto3.client(
-            service_name="s3",
-            endpoint_url=f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
-            aws_access_key_id=settings.R2_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
-            region_name="auto",
-            config=Config(signature_version="s3v4"),
-        )
+        client_kwargs = {
+            "service_name": "s3",
+            "config": Config(signature_version="s3v4"),
+        }
+
+        if settings.AWS_REGION:
+            client_kwargs["region_name"] = settings.AWS_REGION
+
+        if settings.AWS_S3_ENDPOINT_URL:
+            client_kwargs["endpoint_url"] = settings.AWS_S3_ENDPOINT_URL
+
+        # Let boto3 resolve credentials from the normal AWS provider chain:
+        # env vars, shared credentials/config files, IAM role, ECS task role, etc.
+        self.s3_client = boto3.client(**client_kwargs)
 
     def generate_upload_url(self, file_key: str, content_type: str) -> str:
         return self.s3_client.generate_presigned_url(
             ClientMethod="put_object",
-            Params={"Bucket": settings.R2_BUCKET_NAME, "Key": file_key,
+            Params={"Bucket": settings.S3_BUCKET_NAME, "Key": file_key,
                     "ContentType": content_type, "ContentLength": MAX_FILE_SIZE},
             ExpiresIn=300,
         )
@@ -44,7 +50,7 @@ class R2Service:
     def generate_read_url(self, file_key: str) -> str:
         return self.s3_client.generate_presigned_url(
             ClientMethod="get_object",
-            Params={"Bucket": settings.R2_BUCKET_NAME, "Key": file_key},
+            Params={"Bucket": settings.S3_BUCKET_NAME, "Key": file_key},
             ExpiresIn=3600,
         )
 

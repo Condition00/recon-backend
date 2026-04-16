@@ -39,7 +39,7 @@ Recon is the backend for a 3-day, 600-person DEFCON-style cybersecurity fest (Ap
 - **Auth:** Stateless JWT access tokens (60min) + stateful refresh tokens (7 days) in httpOnly cookies. OAuth via Authlib (Google).
 - **Config:** Pydantic Settings (`app/core/config.py`)
 - **Migrations:** Alembic (async, autodiscovery from `app/models/__init__.py`)
-- **File Storage:** Cloudflare R2 (S3-compatible) with presigned URLs
+- **File Storage:** AWS S3 with presigned URLs
 
 ---
 
@@ -65,7 +65,7 @@ The codebase is split by **audience** at the top level. Each top-level folder re
 | `domains/` | Participants | Participant-facing event concepts. Owns DB tables. Vertical slices — one sub-folder per feature. |
 | `admin/` | Ops staff / event admins | Aggregated ops dashboard, overrides, role management. Aggregates across domains. Horizontal layers inside. |
 | `partners/` | Sponsors / partners | Post-event ROI metrics, footfall, engagement data, booth management. Horizontal layers inside. |
-| `infrastructure/` | (app-wide) | Technical capabilities with no audience affinity — R2 storage, Redis helpers, WebSocket/chatroom. |
+| `infrastructure/` | (app-wide) | Technical capabilities with no audience affinity — object storage, Redis helpers, WebSocket/chatroom. |
 | `utils/` | (app-wide) | Pure framework plumbing — `Depends()`, exception classes, SQLModel base. Flat files only. |
 
 **The decision rule:**
@@ -97,7 +97,7 @@ backend/app/
     models/
       base.py                   # Base SQLModel (id, created_at, updated_at)
   infrastructure/               # Technical capabilities with logic and endpoints
-    storage/                    # Cloudflare R2 — presigned upload/read URLs
+    storage/                    # AWS S3 — presigned upload/read URLs
       service/                  # r2_service.py — boto3 client, URL generation
       controller/               # r2_controller.py — validation, file key logic
       router/                   # r2_router.py — GET /r2/upload-url, /r2/read-url
@@ -282,7 +282,7 @@ Agents MUST update this section after completing any meaningful change — domai
 Audience-based top-level structure is complete and stable:
 
 - **`utils/`** — flat files only: `deps.py`, `exceptions.py`, `rbac.py`, `models/base.py`
-- **`infrastructure/storage/`** — fully implemented: R2 presigned upload/read URLs via boto3 with namespace-aware authorization for read access. Mounts at `/api/v1/r2/`
+- **`infrastructure/storage/`** — fully implemented: S3 presigned upload/read URLs via boto3 with namespace-aware authorization for read access. Mounts at `/api/v1/r2/`
 - **`infrastructure/cache/`** — fully implemented: Redis helpers (get/set with TTL, pub/sub, sorted-set leaderboard, counters) + namespaced key builders. Service-only, no HTTP endpoints.
 - **`domains/auth/`** — fully implemented: Google OAuth, JWT tokens, refresh/logout, user CRUD, RBAC seeding, settings-driven OAuth/callback URLs
 - **`domains/announcements/`** — implemented: active feed + admin publish/edit/delete routes with expiry/pinning support
@@ -306,7 +306,7 @@ Audience-based top-level structure is complete and stable:
 | webhooks | Not started | n8n form payload ingestion |
 | shop | Not started | Redemption store |
 | teams | Not started | Team formation and management |
-| announcements | Complete (initial API) | Active feed (`GET /announcements`, `GET /announcements/{id}`), admin publish/edit/delete (`POST /announcements`, `PATCH /announcements/{id}`, `DELETE /announcements/{id}`), fields: priority/published_at/expires_at/is_pinned/created_by. Table: `announcements`. Migration: `d1f2a3b4c5d6`. Realtime pub/sub events published on create/update/delete to Redis channel `announcements.live`. |
+| announcements | Complete (initial API) | Active feed (`GET /announcements`, `GET /announcements/{id}`), admin publish/edit/delete (`POST /announcements`, `PATCH /announcements/{id}`, `DELETE /announcements/{id}`), fields: priority/published_at/expires_at/is_pinned/created_by. Table: `announcements`. Migrations: `d1f2a3b4c5d6`, repair drift migration `1dff7bf50d72`. Realtime pub/sub events published on create/update/delete to Redis channel `announcements.live`. |
 
 ### Admin Status
 
@@ -324,7 +324,7 @@ Audience-based top-level structure is complete and stable:
 
 | Capability | Status | Notes |
 |---|---|---|
-| storage (R2) | Complete | Presigned upload/read URLs with namespace-aware private/public authorization. `infrastructure/storage/`. Mounts at `/api/v1/r2/`. |
+| storage (S3) | Complete | Presigned upload/read URLs with namespace-aware private/public authorization. Uses boto3 credential resolution (env/shared config/IAM role). `infrastructure/storage/`. Mounts at `/api/v1/r2/`. |
 <<<<<<< feature/cache-domain
 | cache (Redis) | Complete | Redis helpers (get/set, pub/sub, sorted-set, counters) + namespaced key builders. `infrastructure/cache/`. No HTTP endpoints. |
 | realtime | Not started | WebSocket chatroom — planned feature |

@@ -1,4 +1,5 @@
 import secrets
+import json
 from enum import Enum
 from typing import Any
 
@@ -18,6 +19,7 @@ class Settings(BaseSettings):
         env_file=(".env", "../.env"),   # Resolves regardless of if uvicorn is run from root or backend/
         env_file_encoding="utf-8",
         extra="ignore",
+        enable_decoding=False,
     )
 
     # ── App ───────────────────────────────────────────────────
@@ -28,6 +30,8 @@ class Settings(BaseSettings):
     API_BASE_URL: str = "http://localhost:8000"
     FRONTEND_REDIRECT_AFTER_LOGIN: str = "http://localhost:5173/auth/callback"
     ALLOWED_ORIGINS: list[str] = [
+        "https://reconhq.tech",
+        "https://www.reconhq.tech",
         "http://localhost:5173",
         "http://localhost:3000",
         "http://127.0.0.1:5173",
@@ -35,6 +39,9 @@ class Settings(BaseSettings):
         "http://testserver",
     ]
     TRUSTED_HOSTS: list[str] = [
+        "reconhq.tech",
+        "www.reconhq.tech",
+        "api.reconhq.tech",
         "localhost",
         "127.0.0.1",
         "testserver",
@@ -62,11 +69,10 @@ class Settings(BaseSettings):
 
     ASYNC_DATABASE_URI: PostgresDsn | str = ""
 
-    # ── R2 / Cloudflare ───────────────────────────────────────
-    R2_ACCOUNT_ID: str = ""
-    R2_ACCESS_KEY_ID: str = ""
-    R2_SECRET_ACCESS_KEY: str = ""
-    R2_BUCKET_NAME: str = ""
+    # ── Object Storage / AWS S3 ───────────────────────────────
+    S3_BUCKET_NAME: str = ""
+    AWS_REGION: str = ""
+    AWS_S3_ENDPOINT_URL: str = ""
 
     @field_validator("ASYNC_DATABASE_URI", mode="before")
     @classmethod
@@ -114,14 +120,8 @@ class Settings(BaseSettings):
                 return f"{api_base_url}{api_v1}/auth/google/callback"
         return v
 
-    # ── OpenAI ────────────────────────────────────────────────
-    OPENAI_API_KEY: str = ""
-
     LOGFIRE_TOKEN: str = ""
     LOGFIRE_ENVIRONMENT: str = "Staging"
-
-    FCM_SERVER_KEY: str = ""
-    FCM_TOPIC: str = "participants"
 
     REDIS_URL: str = ""
 
@@ -131,6 +131,14 @@ class Settings(BaseSettings):
         if v in (None, ""):
             return []
         if isinstance(v, str):
+            trimmed = v.strip()
+            if trimmed.startswith("[") and trimmed.endswith("]"):
+                try:
+                    parsed = json.loads(trimmed)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()]
+                except json.JSONDecodeError:
+                    pass
             return [item.strip() for item in v.split(",") if item.strip()]
         if isinstance(v, list):
             return [str(item).strip() for item in v if str(item).strip()]
@@ -175,7 +183,6 @@ class Settings(BaseSettings):
             self.API_BASE_URL,
             self.FRONTEND_REDIRECT_AFTER_LOGIN,
             self.GOOGLE_REDIRECT_URI,
-            *self.ALLOWED_ORIGINS,
         ):
             if any(token in value for token in localhost_values):
                 raise ValueError("Production URL settings must not reference localhost or copied domains")
