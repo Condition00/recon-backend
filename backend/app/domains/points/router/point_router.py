@@ -2,7 +2,6 @@ import datetime
 import uuid
 
 from fastapi import APIRouter, Depends, Query, status
-from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.database import get_db
@@ -11,14 +10,12 @@ from app.domains.points import controller
 from app.domains.points.schemas import (
     PointAwardCreate,
     PointAwardRead,
-    PointCacheRebuildRead,
     PointLeaderboardMeRead,
     PointLeaderboardPageRead,
     PointMeRead,
-    PointOutboxDrainRead,
     PointTransactionsPageRead,
 )
-from app.utils.deps import get_current_user, get_redis, require_roles
+from app.utils.deps import get_current_user, require_roles
 
 router = APIRouter(prefix="/points", tags=["points"])
 
@@ -27,10 +24,9 @@ router = APIRouter(prefix="/points", tags=["points"])
 async def award_points(
     payload: PointAwardCreate,
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
     actor: User = Depends(require_roles(ROLE_ADMIN)),
 ):
-    return await controller.award(db, payload=payload, actor=actor, redis=redis)
+    return await controller.award(db, payload=payload, actor=actor)
 
 
 @router.get("/me", response_model=PointMeRead)
@@ -47,19 +43,17 @@ async def get_leaderboard(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
     _: User = Depends(get_current_user),
 ):
-    return await controller.leaderboard(db, skip=skip, limit=limit, redis=redis)
+    return await controller.leaderboard(db, skip=skip, limit=limit)
 
 
 @router.get("/leaderboard/me", response_model=PointLeaderboardMeRead)
 async def get_my_leaderboard_rank(
     db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
     user: User = Depends(get_current_user),
 ):
-    return await controller.leaderboard_me(db, user=user, redis=redis)
+    return await controller.leaderboard_me(db, user=user)
 
 
 @router.get("/transactions", response_model=PointTransactionsPageRead)
@@ -86,22 +80,3 @@ async def list_transactions(
         skip=skip,
         limit=limit,
     )
-
-
-@router.post("/leaderboard/cache/rebuild", response_model=PointCacheRebuildRead)
-async def rebuild_leaderboard_cache(
-    db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
-    _: User = Depends(require_roles(ROLE_ADMIN)),
-):
-    return await controller.rebuild_cache(db, redis=redis)
-
-
-@router.post("/outbox/drain", response_model=PointOutboxDrainRead)
-async def drain_points_outbox(
-    limit: int = Query(200, ge=1, le=1000),
-    db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
-    _: User = Depends(require_roles(ROLE_ADMIN)),
-):
-    return await controller.drain_outbox(db, redis=redis, limit=limit)

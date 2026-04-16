@@ -63,14 +63,3 @@ class PointTransactionsPageRead(SQLModel):
     skip: int
     limit: int
     transactions: list[PointTransactionRead]
-
-
-class PointCacheRebuildRead(SQLModel):
-    total_ranked: int
-
-
-class PointOutboxDrainRead(SQLModel):
-    processed: int
-    sent: int
-    failed: int
-    remaining_ready: int

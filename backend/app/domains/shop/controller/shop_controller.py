@@ -1,7 +1,6 @@
 import uuid
 from typing import Optional
 
-from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.auth.models import User
@@ -44,7 +43,6 @@ async def redeem(
     participant_id: uuid.UUID,
     actor: User,
     payload: RedemptionRedeem,
-    redis: Redis | None,
 ) -> RedemptionRead:
     return await redeem_item(
         db,
@@ -52,7 +50,6 @@ async def redeem(
         participant_id=participant_id,
         actor=actor,
         payload=payload,
-        redis=redis,
     )
 
 

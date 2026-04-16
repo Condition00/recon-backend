@@ -229,12 +229,3 @@ async def test_live_points_admin_authz_and_maintenance_endpoints(
     txs = await live_client.get(f"{API_PREFIX}/points/transactions")
     assert txs.status_code == 200
     assert "transactions" in txs.json()
-
-    rebuild = await live_client.post(f"{API_PREFIX}/points/leaderboard/cache/rebuild")
-    assert rebuild.status_code == 200
-    assert rebuild.json()["total_ranked"] >= 1
-
-    drain = await live_client.post(f"{API_PREFIX}/points/outbox/drain?limit=200")
-    assert drain.status_code == 200
-    body = drain.json()
-    assert "processed" in body and "sent" in body and "failed" in body and "remaining_ready" in body

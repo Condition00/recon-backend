@@ -2,7 +2,6 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.auth.models import ROLE_ADMIN, User
@@ -118,13 +117,11 @@ def serialize_participant_for_user(participant: Participant, current_user: User)
     return _serialize_participant(participant, current_user=current_user)
 
 
-async def get_my_dashboard(
-    db: AsyncSession, *, user: User, redis: Redis | None = None
-) -> ParticipantDashboardRead:
+async def get_my_dashboard(db: AsyncSession, *, user: User) -> ParticipantDashboardRead:
     participant = await get_my_participant_profile(db, user=user)
 
     points = await get_my_points_summary(db, user=user, recent_limit=1)
-    rank = await get_my_rank(db, user=user, redis=redis)
+    rank = await get_my_rank(db, user=user)
     checked_in_count, checked_in_zone_ids = await get_checked_in_zone_summary(
         db, participant_id=participant.id
     )

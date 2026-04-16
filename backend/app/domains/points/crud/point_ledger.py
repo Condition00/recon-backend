@@ -6,7 +6,7 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.participants.models import Participant
-from app.domains.points.models import ParticipantPoints, PointLedger, PointsOutbox
+from app.domains.points.models import ParticipantPoints, PointLedger
 from app.domains.points.schemas import PointAwardCreate
 
 
@@ -90,79 +90,6 @@ async def update_projection(
     db.add(projection)
     await db.flush()
     return projection
-
-
-async def enqueue_outbox_event(
-    db: AsyncSession,
-    *,
-    event_type: str,
-    participant_id: uuid.UUID,
-    delta: int,
-    resulting_balance: int,
-    last_activity_at: datetime.datetime,
-    next_attempt_at: datetime.datetime,
-) -> PointsOutbox:
-    event = PointsOutbox(
-        event_type=event_type,
-        participant_id=participant_id,
-        delta=delta,
-        resulting_balance=resulting_balance,
-        last_activity_at=last_activity_at,
-        next_attempt_at=next_attempt_at,
-    )
-    db.add(event)
-    await db.flush()
-    return event
-
-
-async def claim_pending_outbox_events(
-    db: AsyncSession, *, now: datetime.datetime, limit: int
-) -> list[PointsOutbox]:
-    stmt = (
-        select(PointsOutbox)
-        .where(PointsOutbox.sent_at.is_(None))
-        .where(PointsOutbox.next_attempt_at <= now)
-        .order_by(PointsOutbox.next_attempt_at.asc(), PointsOutbox.created_at.asc())
-        .limit(limit)
-        .with_for_update(skip_locked=True)
-    )
-    result = await db.exec(stmt)
-    return list(result.all())
-
-
-async def mark_outbox_sent(
-    db: AsyncSession, *, event: PointsOutbox, sent_at: datetime.datetime
-) -> None:
-    event.sent_at = sent_at
-    event.last_error = None
-    db.add(event)
-    await db.flush()
-
-
-async def mark_outbox_failed(
-    db: AsyncSession,
-    *,
-    event: PointsOutbox,
-    now: datetime.datetime,
-    error: str,
-) -> None:
-    event.attempts += 1
-    # Exponential backoff by attempt count, capped at 300 seconds.
-    delay_seconds = min(2**event.attempts, 300)
-    event.last_error = error[:1000]
-    event.next_attempt_at = now + datetime.timedelta(seconds=delay_seconds)
-    db.add(event)
-    await db.flush()
-
-
-async def count_pending_outbox_events(db: AsyncSession, *, now: datetime.datetime) -> int:
-    stmt = (
-        select(func.count(col(PointsOutbox.id)))
-        .where(PointsOutbox.sent_at.is_(None))
-        .where(PointsOutbox.next_attempt_at <= now)
-    )
-    result = await db.exec(stmt)
-    return int(result.one())
 
 
 async def get_balance_for_participant(
@@ -276,18 +203,6 @@ async def get_leaderboard_page(
     result = await db.exec(stmt)
     rows = [(row[0], row[1], int(row[2]), row[3]) for row in result.all()]
     return total_ranked, rows
-
-
-async def list_projection_totals(
-    db: AsyncSession,
-) -> list[tuple[uuid.UUID, int, datetime.datetime]]:
-    stmt = select(
-        ParticipantPoints.participant_id,
-        ParticipantPoints.total_points,
-        ParticipantPoints.last_activity_at,
-    )
-    result = await db.exec(stmt)
-    return [(row[0], int(row[1]), row[2]) for row in result.all()]
 
 
 async def get_participant_rank_and_balance(

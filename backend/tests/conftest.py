@@ -147,7 +147,6 @@ async def client(session_factory, seeded_roles) -> AsyncGenerator[AsyncClient, N
                 await session.rollback()
                 raise
 
-    app.state.disable_points_outbox_daemon = True
     app.dependency_overrides[get_db] = override_get_db
     fake_redis = FakeRedis()
 
@@ -163,8 +162,6 @@ async def client(session_factory, seeded_roles) -> AsyncGenerator[AsyncClient, N
     ) as async_client:
         yield async_client
     app.dependency_overrides.clear()
-    if hasattr(app.state, "disable_points_outbox_daemon"):
-        delattr(app.state, "disable_points_outbox_daemon")
 
 
 @pytest_asyncio.fixture
