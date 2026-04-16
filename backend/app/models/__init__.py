@@ -13,6 +13,11 @@ from app.partners.models import (  # noqa: F401
     PartnerReport, PartnerReportBase,
 )
 from app.domains.participants.models import Participant, ParticipantBase  # noqa: F401
+from app.domains.points.models import PointLedgerEntry, PointLedgerEntryBase  # noqa: F401
+from app.domains.shop.models import (  # noqa: F401
+    ShopItem, ShopItemBase,
+    Redemption, RedemptionBase,
+)
 
 from app.domains.schedule.models import (  # noqa: F401
     Session, SessionBase,
